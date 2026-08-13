@@ -95,15 +95,9 @@ public final class LevelRenderHandler {
 
     /**
      * Draws one section's geometry, reusing a persistent GL buffer across
-     * frames via {@link SectionGeometryStore.GpuBufferCache} rather
-     * than creating and destroying a transient VBO on every call -- this
-     * replaces an earlier version of this method that did exactly that
-     * (correct, but wasteful: allocate + upload + delete, every section,
-     * every frame, even for sections that hadn't recompiled since the
-     * previous frame). {@code glBufferData} is only called on a cache
-     * miss (this exact {@code CompiledSectionGeometry} instance has never
-     * been uploaded before), which per that record's own doc only happens
-     * when the section has genuinely recompiled.
+     * frames via {@link SectionGeometryStore.GpuBufferCache}.
+     * {@code glBufferData} only runs on a cache miss, i.e. when the
+     * section has genuinely recompiled since the last draw.
      */
     @SuppressWarnings("unused")
     private static void tessera$drawSection(
@@ -118,14 +112,8 @@ public final class LevelRenderHandler {
         int vbo = SectionGeometryStore.GpuBufferCache.get(geometry).orElseGet(() -> {
             int newBuffer = GL15.glGenBuffers();
             GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, newBuffer);
-            // GL_STATIC_DRAW, not GL_STREAM_DRAW: this buffer is now
-            // genuinely persistent and reused across many frames (until
-            // the section recompiles and a new CompiledSectionGeometry
-            // instance replaces this cache entry), matching STATIC_DRAW's
-            // intended usage pattern -- an earlier version used
-            // STREAM_DRAW, correct for the old create-upload-delete-every-
-            // frame pattern but no longer the right hint now that this
-            // buffer outlives a single frame.
+            // STATIC_DRAW: this buffer persists until the section
+            // recompiles and a new CompiledSectionGeometry replaces it.
             GL15.glBufferData(GL15.GL_ARRAY_BUFFER, geometry.vertexData(), GL15.GL_STATIC_DRAW);
             SectionGeometryStore.GpuBufferCache.put(geometry, newBuffer);
             return newBuffer;
@@ -135,44 +123,29 @@ public final class LevelRenderHandler {
 
         int stride = 32;
 
-        // UNVERIFIED byte layout, best-effort: element ORDER is confirmed
-        // (Position, Color, UV, Lightmap, Normal -- no Overlay -- via
-        // DefaultVertexFormat.BLOCK's own canonical Yarn name,
-        // POSITION_COLOR_TEXTURE_LIGHT_NORMAL, which notably omits
-        // "OVERLAY" that NEW_ENTITY's name includes; an earlier draft of
-        // this method incorrectly included a 5th, overlay attribute
-        // pointer copied from a NEW_ENTITY-shaped assumption -- removed
-        // here). Per-element component counts/types below (color as 4
-        // bytes, UV as 2 floats, lightmap as 1 float, normal as 1 float)
-        // are a best-effort assumption, not independently confirmed
-        // against Minecraft's real packed layout -- if floatsPerVertex
-        // above doesn't equal 8, that assumption is definitely wrong and
-        // needs re-deriving against the real per-element sizes. Verify
-        // against DefaultVertexFormat.BLOCK's actual element list in your
-        // IDE before trusting this draw call's visual output.
+        // DefaultVertexFormat.BLOCK, 32 bytes/vertex: Position (3xfloat),
+        // Color (4xubyte), UV0 (2xfloat), UV2/Lightmap (2xshort), Normal
+        // (3xbyte + 1 pad byte). No overlay attribute in this format.
         GL20.glEnableVertexAttribArray(0);
         GL20.glVertexAttribPointer(0, 3, GL11.GL_FLOAT, false, stride, 0L);
 
-        // Color: 4 packed unsigned bytes (RGBA), normalized to [0,1] in-shader --
-        // NOT a single float. Reading this as GL_FLOAT reinterprets the raw RGBA
-        // byte pattern as an IEEE-754 float, which is why quads rendered solid
-        // black/NaN-dark: the resulting "color multiplier" was garbage.
+        // Color: 4 packed unsigned bytes (RGBA), normalized to [0,1] in-shader.
         GL20.glEnableVertexAttribArray(1);
         GL20.glVertexAttribPointer(1, 4, GL11.GL_UNSIGNED_BYTE, true, stride, 12L);
 
         GL20.glEnableVertexAttribArray(2);
         GL20.glVertexAttribPointer(2, 2, GL11.GL_FLOAT, false, stride, 16L);
 
-        // UV2 (lightmap coords): 2 packed shorts, NOT a single float. Same
-        // reinterpretation problem as color -- corrupted lightmap values feed
-        // directly into the fragment shader's lighting term.
+        // UV2 (lightmap coords): 2 packed shorts.
         GL20.glEnableVertexAttribArray(3);
         GL20.glVertexAttribPointer(3, 2, GL11.GL_SHORT, false, stride, 24L);
 
-        // Normal: 4 packed signed bytes (XYZ + pad), normalized, NOT a single
-        // float.
+        // Normal: 3 packed signed bytes (X,Y,Z), normalized -- followed by
+        // 1 unread padding byte per DefaultVertexFormat.BLOCK's own
+        // skip(1); count must be 3, not 4, or the pad byte is read as a
+        // 4th component and corrupts the normal vector.
         GL20.glEnableVertexAttribArray(4);
-        GL20.glVertexAttribPointer(4, 4, GL11.GL_BYTE, true, stride, 28L);
+        GL20.glVertexAttribPointer(4, 3, GL11.GL_BYTE, true, stride, 28L);
 
         if (shader != null && shader.CHUNK_OFFSET != null) {
             shader.CHUNK_OFFSET.set(
@@ -182,16 +155,9 @@ public final class LevelRenderHandler {
             shader.apply();
         }
 
-        // GL_QUADS is not a valid primitive mode in core OpenGL profiles
-        // -- vanilla's own VertexFormat.Mode.QUADS is a logical grouping
-        // only; actual GL draws expand each 4-vertex quad into 2
-        // triangles (6 indices: 0,1,2 / 2,3,0) via a pre-built index
-        // buffer (confirmed pattern:
-        // RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS) in
-        // vanilla's own code). tessera$ensureQuadIndexBuffer below
-        // reproduces that same expansion for however many quads this
-        // section has, reused/grown across calls rather than rebuilt per
-        // draw.
+        // GL_QUADS isn't valid in core GL profiles; each quad is expanded
+        // to 2 triangles (6 indices: 0,1,2 / 2,3,0) via a shared, grown-
+        // as-needed index buffer.
         int indexBuffer = tessera$ensureQuadIndexBuffer(geometry.quadCount());
         GL15.glBindBuffer(GL15.GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
         GL11.glDrawElements(GL11.GL_TRIANGLES, geometry.quadCount() * 6, GL11.GL_UNSIGNED_INT, 0L);

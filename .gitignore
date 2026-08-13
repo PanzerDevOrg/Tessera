@@ -6,6 +6,7 @@ run/
 .kotlin/
 generated/
 versions/
+
 *.config.json
 *.xml
 

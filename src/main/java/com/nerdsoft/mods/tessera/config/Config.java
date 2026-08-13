@@ -43,7 +43,9 @@ public final class Config {
                         "Requires a resource reload to take effect; the settings screen triggers one automatically on save."
                 )
                 .translation("tessera.configuration.disableAnimationsAtlases")
-                .defineList("disableAnimationsAtlases", List.of("minecraft:textures/atlas/blocks"), o -> o instanceof String);
+                .defineList("disableAnimationsAtlases",
+                        List.of("minecraft:textures/atlas/blocks"),
+                        o -> o instanceof String);
 
         builder.pop();
 
@@ -59,7 +61,7 @@ public final class Config {
 
         DEDUP_SKIP_DUPLICATE_ENCODING = builder
                 .comment(
-                        "EXPERIMENTAL — Section 4/14 step 9. When enabled, near-duplicate sprites (per the",
+                        "EXPERIMENTAL. When enabled, near-duplicate sprites (per the",
                         "threshold above) are excluded from the Stitcher's bin-packing entirely and aliased",
                         "to their representative's atlas region instead, actually reducing resident VRAM",
                         "(not just re-encode CPU cost). Defaults to false (opt-in) since this changes which",

@@ -91,14 +91,16 @@ integrated-GPU hardware running texture-heavy modpacks. Everything is built arou
 
 ## Installation & Requirements
 
-| Requirement | Version                                                |
-|-------------|--------------------------------------------------------|
-| Minecraft   | `1.21.1`                                               |
-| Mod Loader  | [NeoForge](https://neoforged.net/) `21.1.248` or later |
-| Java        | `21+`                                                  |
-| OS/Arch     | Windows or Linux, `x86_64`                             |
+| Requirement | Version                                            |
+|-------------|----------------------------------------------------|
+| Minecraft   | `1.21.1`                                           |
+| Mod Loader  | [NeoForge](https://neoforged.net/) `21.X` or later |
+| Java        | `21+`                                              |
+| Windows     | `x86_64`                                           |
+| Linux       | `x86_64`<br/>`AArch64 (ARM64)`                     |
+| Mac         | `Incompatible`                                     |
 
-1. Install [NeoForge](https://neoforged.net/) `21.1.248` or later for Minecraft 1.21.1.
+1. Install [NeoForge](https://neoforged.net/) `21.X` or later for Minecraft 1.21.1.
 2. Download the latest **Tessera** jar from [Modrinth](https://modrinth.com/mod/tessera)
    or [CurseForge](https://www.curseforge.com/minecraft/mc-mods/tessera).
 3. Drop the jar into your `mods/` folder.

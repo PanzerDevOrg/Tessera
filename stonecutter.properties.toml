@@ -1,13 +1,16 @@
+# Mod Metadata
 mod_id = "tessera"
 mod_name = "Tessera"
 mod_group = "com.nerdsoft.mods"
 mod_version = "0.2.0"
-mod_license = "CC-BY-NC-SA-4.0"
+mod_license = "AGPLv3"
+mod_resources_license = "CC-BY-NC-SA-4.0"
 mod_authors = "Bichal"
 mod_description = "A GPU-first VRAM optimization engine that classifies texture atlas sprites by content and recompresses them to BC1/BC7 (with uncompressed RGBA8 for animated sprites) for low-end and integrated-GPU hardware."
 mod_side = "CLIENT"
 mod_issues = "https://github.com/NerdSoftOrg/Tessera/issues"
 
+# Mod Integration
 deps_rust_toolchain = "stable"
 deps_bc7enc_rdo_commit = "b9438627eef73a1157e84201b6fa6eb2ffd6d9f0"
 

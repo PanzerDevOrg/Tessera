@@ -46,22 +46,15 @@ public final class SectionGeometryHandler {
         BlockPos sectionOrigin = event.getSectionOrigin();
         Level level = event.getLevel();
 
-        // Per the event's documented contract, data from non-thread-safe
-        // structures must be read on the main thread (i.e. here, in the
-        // handler body), not inside the registered renderer callback.
-        // TesseraSplitAtlasManager's routing map is a volatile-published,
-        // thread-safe read (see that class's own doc), so it is safe to
-        // defer the actual per-block routing check into the renderer
-        // callback -- only Level/BlockState/BlockPos access needs to
-        // happen carefully with respect to that contract, and Level reads
-        // for block state are standard practice inside such callbacks
-        // (the contract concerns non-thread-safe *client-side caches*,
-        // not the level's own block data access, which is designed to be
-        // read from worker threads for exactly this kind of use).
-        event.addRenderer(context -> {
-            context.getOrCreateChunkBuffer(RenderType.solid());
-            tessera$buildSectionGeometry(sectionOrigin, level);
-        });
+        // Level/BlockState reads are safe inside the renderer callback below
+        // despite the event's non-thread-safe-structures warning -- that
+        // warning concerns client-side caches, not Level's own block data,
+        // which is designed for worker-thread access.
+        // Must not call context.getOrCreateChunkBuffer(...) for any vanilla
+        // RenderType: doing so claims that layer as active for this section
+        // in vanilla's chunk-compile output, and nothing here ever writes
+        // to it -- Tessera-routed quads only ever go into vertexIntsByTarget.
+        event.addRenderer(context -> tessera$buildSectionGeometry(sectionOrigin, level));
     }
 
     /**
@@ -89,11 +82,7 @@ public final class SectionGeometryHandler {
                     }
 
                     BakedModel model = Minecraft.getInstance().getModelManager().getBlockModelShaper().getBlockModel(state);
-                    // x, y, z here are already the section-relative offset
-                    // (0..15 per axis) -- passed straight through rather
-                    // than recomputed from cursor/sectionOrigin subtraction,
-                    // since they're already exactly that value by
-                    // construction of this loop.
+                    // x, y, z are already the section-relative offset (0..15).
                     tessera$collectQuadsForBlock(model, state, x, y, z, random, vertexIntsByTarget, quadCountByTarget);
                 }
             }
@@ -129,16 +118,11 @@ public final class SectionGeometryHandler {
 
     /**
      * For one block position: gets its model's quads per suppressible
-     * layer (mirroring {@link ModelWrapper}'s own layer set) using
-     * the model directly (not through {@code TesseraModelWrapper}, which
-     * would suppress exactly the quads this method needs to collect --
-     * calling the wrapped/original model directly sidesteps that, since
-     * this method IS the intended consumer of the suppressed quads).
+     * layer (mirroring {@link ModelWrapper}'s layer set), querying the
+     * unwrapped model directly since this method is the intended
+     * consumer of the quads {@link ModelWrapper} suppresses from vanilla.
      *
-     * @param relX section-relative block offset (0..15), <em>not</em> the
-     *             block's absolute world position -- see
-     *             {@link #tessera$bakeVertices} for why this must be
-     *             section-relative, not absolute/world-relative
+     * @param relX section-relative block offset (0..15), not world position
      */
     private static void tessera$collectQuadsForBlock(
             BakedModel model, BlockState state, int relX, int relY, int relZ, RandomSource random,
@@ -184,15 +168,9 @@ public final class SectionGeometryHandler {
 
     /**
      * Packs one quad's 4 vertices into {@code DefaultVertexFormat.BLOCK}
-     * layout by copying {@code BakedQuad.getVertices()}'s already-packed
-     * int array through as raw float bits, with the block's
-     * section-relative position added to each vertex's X/Y/Z -- vanilla's
-     * own model baking already encodes each quad's 4 vertices (position,
-     * color, UV, overlay, lightmap, normal) into this exact int[] layout,
-     * so reproducing it here avoids re-deriving position/UV/normal math
-     * from scratch, which would otherwise require duplicating logic from
-     * vanilla's own {@code ModelBlockRenderer} (unconfirmed internals,
-     * deliberately avoided per this project's established approach).
+     * layout (position, color, UV0, UV2/lightmap, normal -- 8 ints/vertex),
+     * copying {@code BakedQuad.getVertices()} through as raw float bits
+     * with the section-relative position added to X/Y/Z.
      */
     private static void tessera$bakeVertices(BakedQuad quad, int relX, int relY, int relZ, TextureAtlasSprite tesseraSprite, List<Integer> outInts) {
         int[] vertexData = quad.getVertices();

@@ -1,5 +1,3 @@
-@file:Suppress("AvoidApplyPluginMethod")
-
 import dev.nerdsoft.build.BuildNativeLibraryTask
 import dev.nerdsoft.build.JsonMinifier
 
@@ -22,16 +20,6 @@ val requiredJava = when {
     else -> JavaVersion.VERSION_1_8
 }
 
-allprojects {
-    repositories {
-        mavenCentral()
-
-        maven("https://maven.neoforged.net/releases/") {
-            name = "NeoForged"
-        }
-    }
-}
-
 neoForge {
     version = sc.properties["neo_version"] as String
 
@@ -42,7 +30,7 @@ neoForge {
 
     mods {
         register(modId) {
-            sourceSet(sourceSets.named("main").get())
+            sourceSet(sourceSets.main.get())
         }
     }
 
@@ -84,7 +72,7 @@ java {
     sourceCompatibility = requiredJava
 
     toolchain {
-        vendor.set(JvmVendorSpec.ADOPTIUM)
+        vendor.set(JvmVendorSpec.AZUL)
         languageVersion.set(JavaLanguageVersion.of(requiredJava.majorVersion))
     }
 }
