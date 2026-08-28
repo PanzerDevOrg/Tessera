@@ -31,3 +31,5 @@ native/vendor/bc7enc_rdo/*
 !native/vendor/bc7enc_rdo/LICENSE
 !native/vendor/bc7enc_rdo/fetch.sh
 !native/vendor/bc7enc_rdo/VENDORING.md
+
+**/src/generated/**/.cache/

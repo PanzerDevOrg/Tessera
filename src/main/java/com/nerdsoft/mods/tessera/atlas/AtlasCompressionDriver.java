@@ -1,8 +1,11 @@
 package com.nerdsoft.mods.tessera.atlas;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.nerdsoft.mods.tessera.api.AtlasCompressEvent;
 import com.nerdsoft.mods.tessera.cache.AtlasCache;
-import com.nerdsoft.mods.tessera.compress.*;
+import com.nerdsoft.mods.tessera.compress.Bc1TextureFormatSupport;
+import com.nerdsoft.mods.tessera.compress.Bc7GpuSupport;
+import com.nerdsoft.mods.tessera.compress.CompressionPipeline;
 import com.nerdsoft.mods.tessera.config.Config;
 import com.nerdsoft.mods.tessera.gui.DebugOverlay;
 import com.nerdsoft.mods.tessera.jni.NativeLibraryLoader;
@@ -10,6 +13,7 @@ import com.nerdsoft.mods.tessera.vram.VramBudgetEngine;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.fml.loading.FMLPaths;
+import net.neoforged.neoforge.common.NeoForge;
 import org.lwjgl.opengl.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,10 +26,10 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Generic BC1/BC7 compression + upload driver, extracted from the old
+ * BC1/BC7 compression + upload driver, extracted from the old
  * {@code SpriteLoaderMixin}'s per-bucket compression path (now disabled --
  * see {@code tessera.mixins.json}) so it can be reused against
- * {@link SplitAtlasManager}'s two independent
+ * {@link SplitAtlasManager}'s independently-owned
  * {@code TextureAtlas} instances without depending on the retired
  * {@code SpriteBucket}/{@code SpriteAtlasRouting} bucket-hack types.
  *
@@ -34,6 +38,15 @@ import java.util.Optional;
  * data to compress. Nothing in this class assumes there is only one atlas,
  * or that atlases share GL texture storage -- both assumptions the old
  * bucket hack made and which caused the original UV-corruption bug.
+ *
+ * <p>Both BC1 and BC7 always go through the same CPU-side native encoder
+ * (via {@link CompressionPipeline}, backed by {@code bc7enc_rdo} for BC7
+ * and the native BC1 encoder for BC1) -- there is no GPU compute-shader
+ * path. This is deliberately simpler than an earlier revision that
+ * dispatched BC1 through a render-thread compute shader: that path
+ * required its own capability detection, its own render-thread/background-
+ * thread branching in {@link SplitAtlasManager}, and its own GLSL resource,
+ * for a format that the CPU encoder already produces at acceptable speed.
  *
  * <h2>Two-phase compress/upload split</h2>
  * {@link #compress} (CPU-only, no GL calls, safe on a background executor)
@@ -46,10 +59,9 @@ import java.util.Optional;
  * {@link #compress} on the same background executor
  * {@code SpriteLoader.stitch()} was already given, and only call
  * {@link #upload} once back on the render thread (see
- * {@link SplitAtlasManager#beginSplitStitch}/
+ * {@link SplitAtlasManager#tessera$triggerMergedStitchIfNeeded}/
  * {@link SplitAtlasManager#applyPendingSplitStitch}).
  */
-@SuppressWarnings("JavadocReference")
 public final class AtlasCompressionDriver {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("Tessera/AtlasCompressionDriver");
@@ -87,6 +99,7 @@ public final class AtlasCompressionDriver {
         // NativeBridge.detectFamiliesAndAssemble and throws UnsatisfiedLinkError instead
         // of the clean vanilla-atlas fallback this method's own docstring promises.
         if (Config.DISABLE_NATIVE_COMPRESSION.get() || !NativeLibraryLoader.isAvailable()) {
+            LOGGER.debug("[Tessera-Debug] {}: buffer assembly skipped (native compression disabled or bridge unavailable).", label);
             return null;
         }
 
@@ -134,6 +147,7 @@ public final class AtlasCompressionDriver {
         NativeFamilyDetector.DetectionResult result = NativeFamilyDetector.detect(
                 pixels, spriteInputs, atlasWidth, atlasHeight, Config.DEDUP_SIMILARITY_THRESHOLD.get());
         if (result == null) {
+            LOGGER.debug("[Tessera-Debug] {}: native family detection returned no result.", label);
             return null;
         }
 
@@ -172,20 +186,7 @@ public final class AtlasCompressionDriver {
      * a full atlas took. Callers should run this on a background executor
      * (e.g. the same one {@code SpriteLoader.stitch()} was already given)
      * and only hand the result to {@link #upload} once back on the render
-     * thread.
-     *
-     * <p><strong>Exception: BC1 with GPU compute available.</strong> When
-     * {@code target == Target.BC1} and {@link Bc1ComputeSupport#isSupported()},
-     * callers should route through {@link #compressBc1OnRenderThread}
-     * instead -- GPU compute dispatch requires GL context access and
-     * cannot run on a background executor the way this method's CPU path
-     * can. This method still handles the BC7 case (always CPU) and the
-     * BC1-without-compute-support fallback identically; only orchestration
-     * at the caller level (see {@code TesseraSplitAtlasManager}) needs to
-     * branch on which path a given atlas should take. This method cannot
-     * make that branching decision itself since it has no way to know,
-     * from here, whether the caller is currently on the render thread or
-     * a background thread.
+     * thread. Handles BC1 and BC7 identically; both are CPU-only.
      *
      * @return a {@link CompressedAtlas} with zero or more levels (zero
      * levels means compression was entirely unavailable/skipped;
@@ -201,6 +202,10 @@ public final class AtlasCompressionDriver {
             LOGGER.info("[Tessera coverage] Atlas {} SKIPPED (BC7 unsupported on this GPU).", atlasLocation);
             return new CompressedAtlas(atlasLocation, target, List.of(), requestedMaxLevel);
         }
+        if (target == CompressionPipeline.Target.BC1 && !Bc1TextureFormatSupport.isSupported()) {
+            LOGGER.info("[Tessera coverage] Atlas {} SKIPPED (BC1/S3TC unsupported on this GPU).", atlasLocation);
+            return new CompressedAtlas(atlasLocation, target, List.of(), requestedMaxLevel);
+        }
 
         long fullChainEstimateBytes = estimateFullMipChainBytes(baseWidth, baseHeight, target);
         if (!VramBudgetEngine.isWithinBudget(fullChainEstimateBytes, 0)) {
@@ -214,6 +219,7 @@ public final class AtlasCompressionDriver {
         if (mipLevels == null || mipLevels.isEmpty()) {
             // Native mip-chain generation unavailable/failed entirely --
             // fall back to compressing level 0 only.
+            LOGGER.debug("[Tessera-Debug] Atlas {}: native mip-chain build unavailable, compressing level 0 only.", atlasLocation);
             mipLevels = List.of(new MipChainBuilder.MipLevel(baseWidth, baseHeight, baseRgba8));
         }
 
@@ -229,59 +235,12 @@ public final class AtlasCompressionDriver {
                         atlasLocation, level);
                 break;
             }
+            LOGGER.debug("[Tessera-Debug] Atlas {} mip level {} ({}x{}) compressed to {} via CPU (fromCache={}).",
+                    atlasLocation, level, mipLevel.width(), mipLevel.height(), target, result.get().fromCache());
             compressedLevels.add(new CompressedLevel(level, mipLevel.width(), mipLevel.height(), result.get().compressedBlocks()));
         }
 
         return new CompressedAtlas(atlasLocation, target, compressedLevels, requestedMaxLevel);
-    }
-
-    /**
-     * Render-thread BC1 compression via {@link Bc1ComputeEncoder}, for use
-     * when {@link Bc1ComputeSupport#isSupported()} -- this is the GPU
-     * counterpart to {@link #compress}'s CPU path, producing the same
-     * {@link CompressedAtlas} shape so {@link #upload} works identically
-     * regardless of which path produced it.
-     *
-     * <p><strong>Current limitation:</strong> only the base level (level
-     * 0) is GPU-encoded. The remaining mip levels still go through
-     * {@link MipChainBuilder}'s CPU box-filter downsampling followed by
-     * {@link Bc1ComputeEncoder#encode} per level -- this method does loop
-     * over all requested levels via that combination, so a full mip chain
-     * is still produced, but the downsampling step itself (not the BC1
-     * encoding) remains CPU work run inline on the render thread here,
-     * which reintroduces a smaller version of the original stall for
-     * atlases with a deep requested mip chain. Moving mip downsampling to
-     * either a background thread (before this method is called) or a
-     * second compute shader is the natural next optimization but is not
-     * implemented in this pass -- flagging rather than silently accepting
-     * a partial regression of the earlier CPU-off-render-thread fix.
-     *
-     * @return a {@link CompressedAtlas}, or one with zero levels if GPU
-     * encoding failed for the base level (caller should fall back
-     * to {@link #compress}'s CPU path entirely in that case)
-     */
-    public static CompressedAtlas compressBc1OnRenderThread(
-            ResourceLocation atlasLocation, ByteBuffer baseRgba8, int baseWidth, int baseHeight, int requestedMaxLevel
-    ) {
-        List<MipChainBuilder.MipLevel> mipLevels = MipChainBuilder.build(baseRgba8, baseWidth, baseHeight, requestedMaxLevel);
-        if (mipLevels == null || mipLevels.isEmpty()) {
-            mipLevels = List.of(new MipChainBuilder.MipLevel(baseWidth, baseHeight, baseRgba8));
-        }
-
-        List<CompressedLevel> compressedLevels = new ArrayList<>(mipLevels.size());
-        for (int level = 0; level < mipLevels.size(); level++) {
-            MipChainBuilder.MipLevel mipLevel = mipLevels.get(level);
-            Optional<Bc1ComputeEncoder.EncodedBlocks> encoded =
-                    Bc1ComputeEncoder.encode(mipLevel.rgba8(), mipLevel.width(), mipLevel.height());
-            if (encoded.isEmpty()) {
-                LOGGER.info("[Tessera coverage] Atlas {} GPU BC1 encode failed at mip level {}; stopping chain here.",
-                        atlasLocation, level);
-                break;
-            }
-            compressedLevels.add(new CompressedLevel(level, mipLevel.width(), mipLevel.height(), encoded.get().packedBlocks()));
-        }
-
-        return new CompressedAtlas(atlasLocation, CompressionPipeline.Target.BC1, compressedLevels, requestedMaxLevel);
     }
 
     /**
@@ -299,6 +258,8 @@ public final class AtlasCompressionDriver {
      */
     public static long upload(int textureId, CompressedAtlas compressed) {
         if (compressed.levels().isEmpty()) {
+            LOGGER.debug("[Tessera-Debug] Atlas {}: upload() called with zero compressed levels; nothing to do.",
+                    compressed.atlasLocation());
             return -1;
         }
 
@@ -308,19 +269,7 @@ public final class AtlasCompressionDriver {
         // BC7's alpha-atlas errors in the log). Every GL call between
         // push/pop below -- including any async debug messages the driver
         // emits for them -- is now tagged with this atlas's own location
-        // string. GL_DEBUG_SOURCE_APPLICATION is the correct source
-        // constant for a marker inserted by application/mod code (as
-        // opposed to GL_DEBUG_SOURCE_API, reserved for the driver's own
-        // generated messages). NVIDIA/AMD both echo
-        // the group string back in subsequent messages until the matching
-        // pop; Intel's Windows driver (this project's actual target
-        // hardware per debug.log's "Intel(R) Iris(R) Xe Graphics") is
-        // known to be inconsistent about honoring this on some builds --
-        // UNVERIFIED whether it does on the specific driver version in
-        // that log. Pushing the group is harmless when unsupported/
-        // ignored (falls back to exactly today's "in (null)" messages,
-        // no regression) and costs nothing when it is honored, so there
-        // is no downside to doing it unconditionally.
+        // string.
         String debugGroupLabel = "tessera:upload:" + compressed.atlasLocation();
         GL43.glPushDebugGroup(GL43.GL_DEBUG_SOURCE_APPLICATION, 0, debugGroupLabel);
         try {
@@ -328,16 +277,14 @@ public final class AtlasCompressionDriver {
         } finally {
             GL43.glPopDebugGroup();
 
-            // One-shot, non-looping poll -- deliberately NOT the flood-
-            // amplifying spin loop the removed tessera$flushGlErrors() was
-            // (see uploadCompressedLevel's own doc comment on why that
-            // was wrong). A single call here produces at most one log
-            // line per upload() invocation (there are only ever a
+            // One-shot, non-looping poll -- deliberately NOT a flood-
+            // amplifying spin loop. A single call here produces at most
+            // one log line per upload() invocation (there are only ever a
             // handful of these per reload, one per atlas), so this cannot
-            // recreate the multi-thousand-line flood the way polling
-            // inside a per-sprite or per-block loop would. This does NOT
-            // replace the async GLDebugMessageCallback as the primary
-            // error-reporting mechanism -- that is untouched and is what
+            // recreate a multi-thousand-line flood the way polling inside
+            // a per-sprite or per-block loop would. This does NOT replace
+            // the async GLDebugMessageCallback as the primary error-
+            // reporting mechanism -- that is untouched and is what
             // actually identifies *which* GL call failed; this is purely
             // a "did upload() as a whole leave any error flagged" signal,
             // logged at DEBUG so it stays out of the way by default.
@@ -352,18 +299,12 @@ public final class AtlasCompressionDriver {
     private static long tessera$uploadInner(int textureId, CompressedAtlas compressed) {
         RenderSystem.bindTexture(textureId);
 
-        // requestedMaxLevel is the same maxMipLevel vanilla's own
-        // SpriteLoader.stitch() call was given for this atlas (see
-        // TesseraSplitAtlasManager#tessera$stitchSplit) -- clamped here
+        // requestedMaxLevel is the same maxMipLevel this family's own
+        // stitch call requested (see SourceAtlasFamily#maxMipLevel /
+        // SplitAtlasManager#tessera$stitchFamily) -- clamped here
         // defensively so compress()'s caller can never walk this driver
         // past a level index deeper than what was actually requested,
-        // regardless of how many levels MipChainBuilder produced. Note
-        // this does NOT guard against vanilla's allocated storage depth,
-        // since glCompressedTexImage2D (see uploadCompressedLevel) respecifies
-        // each level's storage itself rather than writing into a
-        // pre-sized allocation -- there is no fixed "allocated levels"
-        // ceiling to violate on mutable-storage textures the way there
-        // would be on an immutable one.
+        // regardless of how many levels MipChainBuilder produced.
         int maxAllocatedLevel = compressed.requestedMaxLevel();
 
         long totalResidentBytes = 0L;
@@ -379,7 +320,7 @@ public final class AtlasCompressionDriver {
 
         for (CompressedLevel level : compressed.levels()) {
             if (level.level() > maxAllocatedLevel) {
-                LOGGER.warn("Atlas {} compressed chain produced level {} beyond the {} level(s) vanilla's own upload allocated storage for; stopping chain here.",
+                LOGGER.warn("Atlas {} compressed chain produced level {} beyond the {} level(s) this atlas's own stitch requested storage for; stopping chain here.",
                         compressed.atlasLocation(), level.level(), maxAllocatedLevel + 1);
                 break;
             }
@@ -406,21 +347,13 @@ public final class AtlasCompressionDriver {
                     compressed.atlasLocation(), lastUploadedLevel, compressed.requestedMaxLevel());
         }
 
-        // Feeds the F3 debug overlay (see DebugOverlay#recordCompression).
-        // This call site did not exist before this fix: the overlay's
-        // isCompressedAtlasActive flag and byte counters had zero
-        // producers anywhere in the codebase (recordCompression/
-        // recordBucketCompression were dead code, leftover from the
-        // retired SpriteLoaderMixin -- see that method's own stale
-        // doc-comment reference in Tessera#onAtlasStitched), so the
-        // overlay printed "Compression: DISABLED" unconditionally on
-        // every frame regardless of whether compression actually
-        // succeeded. upload() succeeding past this point is exactly the
-        // "compression is active and resident" signal the overlay needs.
         long savedBytes = totalUncompressedBytes - totalResidentBytes;
         DebugOverlay.recordCompression(compressed.atlasLocation().toString(), savedBytes, totalResidentBytes);
         DebugOverlay.recordBucketCompression(
                 compressed.atlasLocation().toString(), compressed.target().name(), savedBytes, totalResidentBytes);
+
+        NeoForge.EVENT_BUS.post(new AtlasCompressEvent.Post(
+                compressed.atlasLocation(), compressed.target().cacheFormat(), savedBytes, totalResidentBytes));
 
         return totalResidentBytes;
     }
@@ -449,17 +382,13 @@ public final class AtlasCompressionDriver {
             return false;
         }
 
-        // Last-line defense, independent of which upstream path produced
-        // these blocks (CompressionPipeline#compress on the CPU side,
-        // Bc1ComputeEncoder#encode on the GPU-compute side, or any future
-        // caller): never issue glCompressedTexImage2D with an S3TC enum
-        // the driver hasn't advertised. This is what was previously
-        // missing -- BC1ComputeSupport/isBc1NativeAvailable both gate on
-        // unrelated capabilities, so this call could still fire on a
-        // driver without GL_EXT_texture_compression_s3tc and leave the
-        // texture's storage for this level undefined (GL_INVALID_OPERATION,
-        // then intermittently-invisible block textures depending on how
-        // the driver happens to handle the resulting incomplete image).
+        // Last-line defense: never issue glCompressedTexImage2D with an
+        // S3TC enum the driver hasn't advertised. compress() already
+        // checks Bc1TextureFormatSupport before running the CPU encoder
+        // at all, but this call site is kept as a second, independent
+        // guard since it is the actual point a bad enum would reach the
+        // driver -- cheap insurance against a future caller bypassing
+        // compress()'s own check.
         if (target == CompressionPipeline.Target.BC1 && !Bc1TextureFormatSupport.isSupported()) {
             LOGGER.warn("Atlas {} BC1 upload skipped: driver does not advertise GL_EXT_texture_compression_s3tc.",
                     atlasLocation);
@@ -470,43 +399,18 @@ public final class AtlasCompressionDriver {
                 ? EXTTextureCompressionS3TC.GL_COMPRESSED_RGB_S3TC_DXT1_EXT
                 : GL42.GL_COMPRESSED_RGBA_BPTC_UNORM;
 
-        // Root-cause fix (debug.log: GL_INVALID_OPERATION id=1282 firing
-        // repeatedly right after "Created: WxHx0 tessera:atlas/*-atlas").
         // Vanilla's TextureAtlas.upload(Preparations) allocates this
         // texture's storage via glTexImage2D per level -- MUTABLE storage,
-        // format GL_RGBA8 -- not glTexStorage2D. (TextureAtlas has never
-        // opted into ARB_texture_storage; only explicit immutable-storage
-        // call sites, e.g. some Sodium/Iris-side textures, use that path.)
-        // glCompressedTexSubImage2D requires the target level's EXISTING
-        // internal format to already be a compressed format matching the
-        // call -- writing compressed blocks into a level GL still considers
-        // RGBA8 is GL_INVALID_OPERATION regardless of dimensions matching.
-        // glCompressedTexImage2D is therefore correct here: it respecifies
-        // the level's format+storage in one call, which is legal (and
-        // required) against mutable storage. This was previously believed
-        // to be the bug (see git history), but vanilla's atlas storage was
-        // never immutable, so that theory does not hold; reverting to
-        // glCompressedTexImage2D is the actual fix.
+        // format GL_RGBA8 -- not glTexStorage2D (TextureAtlas has never
+        // opted into ARB_texture_storage). glCompressedTexImage2D
+        // respecifies the level's format+storage in one call, which is
+        // legal (and required) against mutable storage; glCompressedTexSubImage2D
+        // would require the level's EXISTING internal format to already
+        // be compressed, which it never is coming from vanilla's own
+        // upload.
         GL13.glCompressedTexImage2D(
                 GL11.GL_TEXTURE_2D, level, glInternalFormat, alignedWidth, alignedHeight, 0, compressedBlocks
         );
-
-        // No glGetError() poll here by design (the removed
-        // tessera$flushGlErrors() spin loop was one). Polling error state
-        // in a loop on the render thread is a synchronous pipeline stall
-        // and, on this driver (Intel Iris Xe, Windows), each real
-        // GL_INVALID_OPERATION was additionally being re-emitted by
-        // Mojang's own GLDebugMessageCallback (installed by GlDebug) on
-        // every subsequent poll until the queue drained -- that interaction
-        // is what turned a handful of real errors into the multi-thousand-
-        // line flood in debug.log. The async debug callback is the correct,
-        // already-installed error-reporting mechanism; this call site does
-        // not need to (and must not) poll glGetError() itself. Level-upload
-        // failure is now only detectable via the debug callback's own log
-        // output, not a return value -- this method reports success
-        // unconditionally past the size-mismatch guard above, same as
-        // every other GL call in this codebase that isn't manually
-        // wrapped in a glGetError() check.
 
         long uncompressedSize = (long) width * height * 4;
         long compressedSize = compressedBlocks.remaining();

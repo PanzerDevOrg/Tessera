@@ -31,8 +31,8 @@ public class EnUsLanguageProvider extends LanguageProvider {
                 "BC7 quality preset (0: Fastest to 7: Highest Fidelity). Controls compression quality vs processing time.");
         addConfigOption("disableNativeCompression", "Disable Native Compression",
                 "Forces vanilla RGBA atlas behavior even if BC7 native compression is supported.");
-        addConfigOption("disableAnimationsForMaxVramSavings", "Disable Texture Animations",
-                "Freezes animated textures (water, lava, portal, GUIs) to allow forcing BC7 compression on massive atlases like blocks.png and gui.png.");
+        addConfigOption("disableAnimationsAtlases", "Disable Texture Animations",
+                "List of atlas locations where animations should be disabled, freezing them to allow forcing compression on massive atlases like blocks.png and gui.png.");
 
         // Deduplication Options
         addConfigOption("dedupSimilarityThreshold", "Deduplication Similarity Threshold",
@@ -43,8 +43,6 @@ public class EnUsLanguageProvider extends LanguageProvider {
         // VRAM Budget Options
         addConfigOption("vramBudgetTargetMb", "VRAM Budget Target (MB)",
                 "Advisory VRAM memory limit in megabytes evaluated during atlas stitching.");
-        addConfigOption("maxQualityStepDownAttempts", "Max Quality Step Down Attempts",
-                "Maximum quality reduction attempts performed when trying to stay within the VRAM budget.");
 
         // Cache Options
         addConfigOption("cacheDirectory", "Cache Directory",

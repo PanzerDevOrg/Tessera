@@ -23,7 +23,7 @@ public final class NativeBridge {
 
     /**
      * JNI Signature Mapping:
-     * (Ljava/nio/ByteBuffer;II[I[I[I[I[II)Ljava/nio/ByteBuffer;
+     * (Ljava/nio/ByteBuffer;[I[I[I[I[I[IIII)Ljava/nio/ByteBuffer;
      */
     public static native ByteBuffer detectFamiliesAndAssemble(
             ByteBuffer pixels,

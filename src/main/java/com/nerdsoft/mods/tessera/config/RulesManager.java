@@ -13,7 +13,11 @@ import java.util.concurrent.Executor;
 
 public final class RulesManager implements PreparableReloadListener {
 
-    public static final Set<String> BLACKLISTED_ATLASES = new HashSet<>(Set.of(AtlasSplitTarget.OPAQUE.atlasLocation().toString(), AtlasSplitTarget.ALPHA.atlasLocation().toString()));
+    public static final Set<String> BLACKLISTED_ATLASES = new HashSet<>(Set.of(
+            AtlasSplitTarget.OPAQUE.atlasLocation().toString(),
+            AtlasSplitTarget.ALPHA.atlasLocation().toString(),
+            AtlasSplitTarget.HUD_OPAQUE.atlasLocation().toString(),
+            AtlasSplitTarget.HUD_ALPHA.atlasLocation().toString()));
 
     public static Integer forcedVramBudgetMb;
 

@@ -20,7 +20,7 @@ import java.util.Map;
  *
  * <h2>Why every block, not a filtered subset</h2>
  * At bake time (when this event fires) Tessera's split-atlas routing table
- * ({@code TesseraSplitAtlasManager.routingFor}) is not guaranteed to be
+ * ({@code SplitAtlasManager.routingFor}) is not guaranteed to be
  * populated yet for the <em>current</em> reload -- model baking and atlas
  * stitching are both async phases of the same resource reload, and their
  * relative ordering is not confirmed. Rather than risk wrapping too few

@@ -53,7 +53,14 @@ public final class AtlasCache {
             }
 
             ByteBuffer header = ByteBuffer.allocate(HEADER_BYTES).order(ByteOrder.LITTLE_ENDIAN);
-            channel.read(header);
+            while (header.hasRemaining()) {
+                if (channel.read(header) < 0) {
+                    // Truncated file, shorter than its own declared header
+                    // size -- treat as a miss rather than reading a
+                    // partially zero-filled header.
+                    return Optional.empty();
+                }
+            }
             header.flip();
 
             byte[] magic = new byte[MAGIC.length];
@@ -81,7 +88,13 @@ public final class AtlasCache {
 
             ByteBuffer payload = ByteBuffer.allocateDirect(payloadLength);
             while (payload.hasRemaining()) {
-                channel.read(payload);
+                if (channel.read(payload) < 0) {
+                    // Truncated mid-read (e.g. concurrent external
+                    // modification of the cache file) -- treat as a miss
+                    // rather than spinning forever or returning a
+                    // partially-filled buffer.
+                    return Optional.empty();
+                }
             }
             payload.flip();
 

@@ -12,7 +12,6 @@ public final class Config {
     public static final ModConfigSpec.IntValue DEDUP_SIMILARITY_THRESHOLD;
     public static final ModConfigSpec.BooleanValue DEDUP_SKIP_DUPLICATE_ENCODING;
     public static final ModConfigSpec.IntValue VRAM_BUDGET_TARGET_MB;
-    public static final ModConfigSpec.IntValue MAX_QUALITY_STEP_DOWN_ATTEMPTS;
     public static final ModConfigSpec.ConfigValue<String> CACHE_DIRECTORY;
     public static final ModConfigSpec.BooleanValue DISABLE_NATIVE_COMPRESSION;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> DISABLE_ANIMATIONS_ATLASES;
@@ -78,15 +77,13 @@ public final class Config {
         VRAM_BUDGET_TARGET_MB = builder
                 .comment(
                         "Advisory VRAM target in megabytes for the compressed atlas. Evaluated once per",
-                        "resource-pack or mod-list reload, not polled continuously at runtime."
+                        "resource-pack or mod-list reload, not polled continuously at runtime.",
+                        "BC1/BC7 are both fixed bits-per-pixel formats, so this cannot be enforced by",
+                        "lowering compressionQuality -- an atlas over this budget is logged as a warning",
+                        "only; lower dedupSimilarityThreshold or accept the overage."
                 )
                 .translation("tessera.configuration.vramBudgetTargetMb")
                 .defineInRange("vramBudgetTargetMb", 2048, 256, 16384);
-
-        MAX_QUALITY_STEP_DOWN_ATTEMPTS = builder
-                .comment("Maximum number of quality-preset step-downs attempted to fit the VRAM budget before giving up.")
-                .translation("tessera.configuration.maxQualityStepDownAttempts")
-                .defineInRange("maxQualityStepDownAttempts", 3, 0, 7);
 
         builder.pop();
 

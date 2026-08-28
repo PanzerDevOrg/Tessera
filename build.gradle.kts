@@ -38,18 +38,21 @@ neoForge {
         all {
             val runDir = rootProject.file("versions/${sc.current.version}/run")
             if (!runDir.exists()) runDir.mkdirs()
+
+            sourceSet = sourceSets.main.get()
             gameDirectory = runDir
         }
 
         register("client") {
-            this.client()
-            sourceSet = sourceSets.named("main").get()
+            client()
             systemProperty("neoforge.enabledGameTestNamespaces", modId)
         }
 
         register("data") {
-            this.data()
-            sourceSet = sourceSets.named("main").get()
+            // Thats not a clean solution... but it works, can remove if u dont use other mods in run/mods/
+            gameDirectory = rootProject.file("versions/${sc.current.version}/run/data")
+
+            data()
             programArguments.addAll(
                 "--mod", modId,
                 "--all",

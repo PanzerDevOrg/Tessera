@@ -1,7 +1,7 @@
 package com.nerdsoft.mods.tessera;
 
 import com.nerdsoft.mods.tessera.atlas.AtlasCompressionDriver;
-import com.nerdsoft.mods.tessera.compress.Bc1ComputeSupport;
+import com.nerdsoft.mods.tessera.atlas.AtlasSplitTarget;
 import com.nerdsoft.mods.tessera.compress.Bc1TextureFormatSupport;
 import com.nerdsoft.mods.tessera.compress.Bc7GpuSupport;
 import com.nerdsoft.mods.tessera.config.Config;
@@ -74,27 +74,30 @@ public final class Tessera {
 
     private void onClientSetup(FMLClientSetupEvent event) {
         event.enqueueWork(() -> {
-            // Render-thread warmup for all three GL-capability caches.
-            // GL.getCapabilities() is thread-local to whatever thread has
-            // a context current -- SplitAtlasManager's background stitch
-            // executor is the first real caller of the BC1 checks at
-            // runtime, has no context, and previously poisoned both
-            // caches to `false` forever the moment a reload ran (see
-            // Bc1TextureFormatSupport/Bc1ComputeSupport class docs for the
-            // full root-cause writeup). Bc7GpuSupport was already warmed
-            // here; BC1's two checks were the ones missing this call,
-            // which is why only the opaque (BC1) atlas ever reported
-            // "SKIPPED (compression unavailable)" while alpha (BC7)
-            // compressed correctly.
-            boolean bc7Supported = Bc7GpuSupport.isSupported();
+            for (AtlasSplitTarget target : AtlasSplitTarget.values()) {
+                if (target.eligible()) {
+                    Minecraft.getInstance().getTextureManager().register(
+                            target.atlasLocation(), TesseraClient.SPLIT_ATLAS_MANAGER.atlasFor(target));
+                }
+            }
+
+            // Both BC1 and BC7 compress on the CPU via the native bridge --
+            // no GPU compute-shader path exists (see AtlasCompressionDriver's
+            // class doc), so only these two capability checks need
+            // render-thread warmup here.
+            Bc7GpuSupport.warmUp();
             Bc1TextureFormatSupport.warmUp();
-            Bc1ComputeSupport.warmUp();
+            boolean bc7Supported = Bc7GpuSupport.isSupported();
+            boolean bc1Supported = Bc1TextureFormatSupport.isSupported();
+
+            LOGGER.debug("[Tessera-Debug] Client setup: nativeBridgeAvailable={}, bc7Supported={}, bc1Supported={}.",
+                    NativeLibraryLoader.isAvailable(), bc7Supported, bc1Supported);
 
             if (NativeLibraryLoader.isAvailable() && !bc7Supported) {
                 LOGGER.warn("Tessera native bridge loaded, but this GPU/driver does not expose "
                         + "GL_COMPRESSED_RGBA_BPTC_UNORM_ARB; falling back to vanilla atlas behavior.");
             }
-            if (NativeLibraryLoader.isAvailable() && !Bc1TextureFormatSupport.isSupported()) {
+            if (NativeLibraryLoader.isAvailable() && !bc1Supported) {
                 LOGGER.warn("Tessera native bridge loaded, but this GPU/driver does not expose "
                         + "GL_EXT_texture_compression_s3tc; opaque atlas will remain uncompressed RGBA8.");
             }

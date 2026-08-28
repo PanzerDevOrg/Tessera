@@ -31,8 +31,8 @@ public class EsEsLanguageProvider extends LanguageProvider {
                 "Preajuste de calidad BC7 (0: Más rápido a 7: Máxima fidelidad). Controla la calidad de compresión contra el tiempo de procesamiento.");
         addConfigOption("disableNativeCompression", "Desactivar Compresión Nativa",
                 "Fuerza el comportamiento RGBA vanilla aunque la compresión BC7 esté soportada por la GPU.");
-        addConfigOption("disableAnimationsForMaxVramSavings", "Congelar Animaciones (Máximo Ahorro)",
-                "Congela las animaciones de texturas (agua, lava, portales, GUIs) para permitir forzar compresión BC7 en atlas gigantes como blocks.png y gui.png.");
+        addConfigOption("disableAnimationsAtlases", "Congelar Animaciones (Máximo Ahorro)",
+                "Lista de atlas donde se desactivan las animaciones, congelándolas para permitir forzar la compresión en atlas gigantes como blocks.png y gui.png.");
 
         // Opciones de Desduplicación
         addConfigOption("dedupSimilarityThreshold", "Umbral de Similitud",
@@ -43,8 +43,6 @@ public class EsEsLanguageProvider extends LanguageProvider {
         // Opciones de Límite de VRAM
         addConfigOption("vramBudgetTargetMb", "Objetivo de VRAM (MB)",
                 "Límite orientativo de memoria VRAM en megabytes evaluado durante el empaquetado de atlas.");
-        addConfigOption("maxQualityStepDownAttempts", "Intentos de Reducción de Calidad",
-                "Número máximo de intentos de reducción de calidad ejecutados para mantenerse dentro del límite de VRAM.");
 
         // Opciones de Caché
         addConfigOption("cacheDirectory", "Directorio de Caché",

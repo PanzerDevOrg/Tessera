@@ -4,18 +4,19 @@ import com.nerdsoft.mods.tessera.compress.CompressionPipeline;
 import net.minecraft.resources.ResourceLocation;
 
 /**
- * The two independently-stitched, independently-owned static atlases that
- * replace the old same-atlas "bucket" hack. Each value here corresponds to
- * a real {@code net.minecraft.client.renderer.texture.TextureAtlas}
- * instance with its own GL texture ID, its own {@code SpriteLoader.stitch()}
- * pass, and therefore its own self-consistent UV space -- there is no
- * cross-atlas coordinate reuse anywhere in this design, which is what the
- * previous single-atlas-three-textures approach got wrong.
+ * The four independently-stitched, independently-owned static atlases that
+ * replace the old same-atlas "bucket" hack -- one opaque/alpha pair per
+ * {@link SourceAtlasFamily}. Each value here corresponds to a real
+ * {@code net.minecraft.client.renderer.texture.TextureAtlas} instance with
+ * its own GL texture ID, its own {@code SpriteLoader.stitch()} pass, and
+ * therefore its own self-consistent UV space -- there is no cross-atlas
+ * coordinate reuse anywhere in this design, which is what the previous
+ * single-atlas-three-textures approach got wrong.
  *
  * <p>Only <em>static</em> (non-animated) sprites are split this way.
  * Animated sprites (anything with a {@code Ticker}) are deliberately left
- * on vanilla's own {@code TextureAtlas.LOCATION_BLOCKS} / equivalent, sized
- * down to just that subset -- see {@link SpriteClassifier}.
+ * on vanilla's own source atlas, sized down to just that subset -- see
+ * {@link SpriteClassifier}.
  */
 public enum AtlasSplitTarget {
 
@@ -44,33 +45,27 @@ public enum AtlasSplitTarget {
     ),
 
     /**
-     * Reserved for {@code minecraft:textures/atlas/gui}'s opaque/
-     * punch-through sprites. Defined here so the F3 breakdown and
-     * {@link com.nerdsoft.mods.tessera.gui.DebugOverlay} naming can refer
-     * to it, but {@link com.nerdsoft.mods.tessera.mixin.SpriteRoutingMixin}
-     * does not route any sprites here yet -- GUI blits bind the vanilla
-     * atlas directly by {@link ResourceLocation}, with no equivalent to
+     * {@code minecraft:textures/atlas/gui}'s opaque/punch-through sprites.
+     * Consumed by the {@code GuiGraphics.blitSprite} rendering mixin, which
+     * rebinds a routed sprite's blit onto this atlas with UVs rewritten
+     * relative to its own packing -- the GUI-side counterpart to
      * {@code ModelWrapper}/{@code SectionGeometryHandler}/
-     * {@code LevelRenderHandler} to rebind them onto a separate physical
-     * texture. {@link #eligible()} reflects that: no static sprite is ever
-     * classified against this target until a GUI-side rendering consumer
-     * exists.
+     * {@code LevelRenderHandler} for blocks.
      */
     HUD_OPAQUE(
             ResourceLocation.fromNamespaceAndPath("tessera", "atlas/hud_opaque"),
             CompressionPipeline.Target.BC1,
-            false
+            true
     ),
 
     /**
-     * Reserved for {@code minecraft:textures/atlas/gui}'s blended-alpha
-     * sprites. See {@link #HUD_OPAQUE} for why this is defined but not
-     * yet populated.
+     * {@code minecraft:textures/atlas/gui}'s blended-alpha sprites. See
+     * {@link #HUD_OPAQUE} for the rendering consumer both share.
      */
     HUD_ALPHA(
             ResourceLocation.fromNamespaceAndPath("tessera", "atlas/hud_alpha"),
             CompressionPipeline.Target.BC7,
-            false
+            true
     );
 
     private final ResourceLocation atlasLocation;
@@ -94,8 +89,9 @@ public enum AtlasSplitTarget {
     /**
      * Whether a real, wired-up rendering consumer exists for this target.
      * {@link #OPAQUE}/{@link #ALPHA} are consumed by the block chunk-layer
-     * render path; {@link #HUD_OPAQUE}/{@link #HUD_ALPHA} are not consumed
-     * anywhere yet and must never receive routed sprites.
+     * render path ({@code SectionGeometryHandler}/{@code LevelRenderHandler});
+     * {@link #HUD_OPAQUE}/{@link #HUD_ALPHA} are consumed by the GUI sprite
+     * blit path ({@code GuiBlitSpriteMixin}).
      */
     public boolean eligible() {
         return eligible;

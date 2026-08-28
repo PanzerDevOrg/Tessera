@@ -158,9 +158,6 @@ public final class DebugOverlay {
                     rightList.add(String.format("§7%s: §a%.2f MB§r", entry.getKey(), atlasSavedMB));
                     appendBucketBreakdownFor(rightList, entry.getKey());
                 });
-
-        rightList.add("§7hud_alpha: §eReserved§r");
-        rightList.add("§7hud_opaque: §eReserved§r");
     }
 
     /**

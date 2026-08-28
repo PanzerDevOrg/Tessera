@@ -99,14 +99,13 @@ public final class CompressionPipeline {
         int preset = Config.COMPRESSION_QUALITY.get();
         long budgetBytes = Config.VRAM_BUDGET_TARGET_MB.get() * 1024L * 1024L;
         long projectedBytes = projectedCompressedSize(width, height, target);
-        int maxAttempts = Config.MAX_QUALITY_STEP_DOWN_ATTEMPTS.get();
 
-        int attempts = 0;
-        while (projectedBytes > budgetBytes && preset > 0 && attempts < maxAttempts) {
-            preset--;
-            attempts++;
-        }
-
+        // BC1/BC7 are both fixed bits-per-pixel formats -- projectedBytes
+        // is a function of width/height/target alone and does not change
+        // with preset, so stepping preset down here could never bring an
+        // over-budget atlas back under budget; it would only degrade
+        // encode fidelity for no VRAM benefit. Warn and keep the
+        // configured preset rather than silently degrading it.
         if (projectedBytes > budgetBytes) {
             LOGGER.warn("Atlas bucket ({}x{}, ~{} MB as {}) exceeds vramBudgetTargetMb ({} MB); {} is a fixed " + "{}-bits-per-pixel format, so compressionQuality only affects encode fidelity here, " + "not resident size. Lower dedupSimilarityThreshold or vramBudgetTargetMb expectations, " + "or accept the overage.", width, height, projectedBytes / (1024 * 1024), target, budgetBytes / (1024 * 1024), target, target.bytesPerBlock() / 2);
         }

@@ -36,6 +36,7 @@ public final class LevelRenderHandler {
     private static volatile int tessera$sharedQuadIndexBuffer = -1;
     private static volatile int tessera$sharedQuadIndexBufferCapacity = 0;
     private static volatile int tessera$vao = -1;
+    private static volatile boolean tessera$loggedOnce = false;
 
     private LevelRenderHandler() {
     }
@@ -51,6 +52,13 @@ public final class LevelRenderHandler {
         } else {
             return;
         }
+
+        // Render-thread-only: frees GL buffers superseded by a recompile
+        // or freed by a chunk unload since last frame (see
+        // SectionGeometryStore's own doc). Runs on both stages this
+        // handler subscribes to; draining an already-empty queue on the
+        // second call each frame is a cheap no-op.
+        SectionGeometryStore.drainPendingGpuBufferDeletions();
 
         if (!TesseraClient.SPLIT_ATLAS_MANAGER.hasContent(target)) {
             return;
@@ -88,8 +96,15 @@ public final class LevelRenderHandler {
 
         RenderSystem.disableBlend();
 
-        if (drawnSections[0] > 0) {
-            LOGGER.info("[Tessera-Debug] Drew {} sections for Tessera atlas {}.", drawnSections[0], target);
+        // This handler runs twice per rendered frame (once per stage this
+        // class subscribes to) -- logging every occurrence once this path
+        // is actually drawing geometry would flood the log at 60-120+
+        // lines/second. Match ModelWrapper's own first-hit-only pattern:
+        // confirm this path is live once, then go quiet.
+        if (!tessera$loggedOnce && drawnSections[0] > 0) {
+            LOGGER.info("[Tessera-Debug] Drew {} sections for Tessera atlas {}. (Further logs muted)",
+                    drawnSections[0], target);
+            tessera$loggedOnce = true;
         }
     }
 

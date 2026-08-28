@@ -1,5 +1,3 @@
-@file:Suppress("UnstableApiUsage")
-
 pluginManagement {
     repositories {
         mavenCentral()
@@ -7,16 +5,6 @@ pluginManagement {
         maven("https://maven.neoforged.net/releases/") { name = "NeoForged" }
         maven("https://maven.kikugie.dev/releases") { name = "KikuGie Releases" }
         maven("https://maven.kikugie.dev/snapshots") { name = "KikuGie Snapshots" }
-    }
-}
-
-dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-    repositories {
-        mavenCentral()
-        maven("https://maven.neoforged.net/releases/") {
-            name = "NeoForged"
-        }
     }
 }
 

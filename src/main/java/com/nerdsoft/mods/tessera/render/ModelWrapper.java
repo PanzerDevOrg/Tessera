@@ -30,6 +30,21 @@ import java.util.Set;
  * is what actually draws that geometry instead, via
  * {@code AddSectionGeometryEvent} -- see that class's doc for why this
  * split is required and how the two halves stay in sync.
+ *
+ * <h2>{@link #tessera$unwrap()} -- required by {@link SectionGeometryHandler}</h2>
+ * {@code BakedModelShaper.getBlockModel(state)} returns whatever model is
+ * registered for that state -- which, after {@link ModelBakingHandler}
+ * runs, is always this wrapper, never the original. If
+ * {@link SectionGeometryHandler} called {@code getQuads} on that same
+ * wrapped instance to recover the quads this class suppresses, it would
+ * recurse straight back into this class's own {@link #getQuads} override
+ * and receive the ALREADY-FILTERED list -- i.e. it would never see the
+ * Tessera-routed quads it exists to re-add, and every block Tessera
+ * splits would compile to zero replacement geometry (invisible). This
+ * accessor returns the untouched {@code originalModel}
+ * ({@link BakedModelWrapper}'s own protected field) specifically so
+ * {@link SectionGeometryHandler} can query it directly and see every
+ * quad, suppressed or not.
  */
 public final class ModelWrapper extends BakedModelWrapper<BakedModel> {
 
@@ -39,6 +54,17 @@ public final class ModelWrapper extends BakedModelWrapper<BakedModel> {
 
     public ModelWrapper(BakedModel original) {
         super(original);
+    }
+
+    /**
+     * The unwrapped original model, bypassing this class's own quad
+     * suppression entirely. See this class's own doc for why
+     * {@link SectionGeometryHandler} must go through this rather than
+     * calling {@code getQuads} on whatever {@code getBlockModel(state)}
+     * returns.
+     */
+    public BakedModel tessera$unwrap() {
+        return originalModel;
     }
 
     @Override

@@ -82,17 +82,34 @@ public final class SectionGeometryHandler {
                     }
 
                     BakedModel model = Minecraft.getInstance().getModelManager().getBlockModelShaper().getBlockModel(state);
+                    // getBlockModel(state) returns whatever ModelBakingHandler
+                    // registered for this state -- always a ModelWrapper
+                    // instance after baking (see that class's own doc).
+                    // Calling getQuads directly on it would recurse into
+                    // ModelWrapper's own suppression override and receive
+                    // the ALREADY-FILTERED quad list, i.e. this method
+                    // would never see the Tessera-routed quads it exists to
+                    // re-add -- every Tessera-split block would compile to
+                    // zero replacement geometry here (invisible), while
+                    // ModelWrapper still correctly suppressed it from
+                    // vanilla's own chunk buffer. tessera$unwrap() returns
+                    // the untouched original model instead, so the query
+                    // below sees every quad, suppressed or not.
+                    BakedModel unwrapped = model instanceof ModelWrapper wrapper ? wrapper.tessera$unwrap() : model;
+                    long seed = state.getSeed(cursor);
                     // x, y, z are already the section-relative offset (0..15).
-                    tessera$collectQuadsForBlock(model, state, x, y, z, random, vertexIntsByTarget, quadCountByTarget);
+                    tessera$collectQuadsForBlock(unwrapped, state, seed, x, y, z, random, vertexIntsByTarget, quadCountByTarget);
                 }
             }
         }
 
         int totalTesseraQuads = 0;
-        for (AtlasSplitTarget target : AtlasSplitTarget.values()) {
-            if (!target.eligible()) {
-                continue;
-            }
+        // Block quads can only ever route to the BLOCKS family's two
+        // targets (see SourceAtlasFamily/SpriteRoutingMixin) -- HUD_OPAQUE/
+        // HUD_ALPHA never appear as keys in vertexIntsByTarget/
+        // quadCountByTarget, but the loop is scoped explicitly rather than
+        // relying on that being true only by construction.
+        for (AtlasSplitTarget target : List.of(AtlasSplitTarget.OPAQUE, AtlasSplitTarget.ALPHA)) {
             List<Integer> ints = vertexIntsByTarget.get(target);
             int quadCount = quadCountByTarget.getOrDefault(target, 0);
             if (ints == null || quadCount == 0) {
@@ -122,17 +139,38 @@ public final class SectionGeometryHandler {
      * unwrapped model directly since this method is the intended
      * consumer of the quads {@link ModelWrapper} suppresses from vanilla.
      *
-     * @param relX section-relative block offset (0..15), not world position
+     * <p>{@code random} is reseeded with {@code seed} immediately before
+     * every single {@code getQuads} call, exactly matching
+     * {@code ModelBlockRenderer#tesselateBlock}/{@code tesselateWithoutAO}'s
+     * own per-direction {@code setSeed(seed)} contract. Models with more
+     * than one weighted/multipart variant (e.g. {@code WeightedBakedModel})
+     * consume {@code RandomSource} state inside {@code getQuads} to pick
+     * which variant to return; without reseeding every call, each
+     * direction/layer call here would advance the shared generator further
+     * and resolve a different variant than the one vanilla's own,
+     * correctly-reseeded compile pass selected and {@link ModelWrapper}
+     * suppressed -- leaving that block/layer with no geometry from either
+     * side.
+     *
+     * @param model the UNWRAPPED original model -- callers must resolve
+     *              through {@link ModelWrapper#tessera$unwrap()} first
+     *              (see {@link #tessera$buildSectionGeometry}); calling
+     *              this with the wrapped instance would silently recurse
+     *              into {@link ModelWrapper}'s own suppression and yield
+     *              an already-filtered list
+     * @param relX  section-relative block offset (0..15), not world position
      */
     private static void tessera$collectQuadsForBlock(
-            BakedModel model, BlockState state, int relX, int relY, int relZ, RandomSource random,
+            BakedModel model, BlockState state, long seed, int relX, int relY, int relZ, RandomSource random,
             Map<AtlasSplitTarget, List<Integer>> vertexIntsByTarget, Map<AtlasSplitTarget, Integer> quadCountByTarget
     ) {
         for (RenderType layer : SUPPRESSIBLE_LAYERS) {
             for (Direction side : Direction.values()) {
+                random.setSeed(seed);
                 List<BakedQuad> quads = model.getQuads(state, side, random, ModelData.EMPTY, layer);
                 tessera$collectQuads(quads, relX, relY, relZ, vertexIntsByTarget, quadCountByTarget);
             }
+            random.setSeed(seed);
             List<BakedQuad> unculled = model.getQuads(state, null, random, ModelData.EMPTY, layer);
             tessera$collectQuads(unculled, relX, relY, relZ, vertexIntsByTarget, quadCountByTarget);
         }

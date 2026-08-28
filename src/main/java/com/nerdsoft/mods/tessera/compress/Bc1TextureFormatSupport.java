@@ -20,30 +20,18 @@ import org.lwjgl.opengl.GL;
  * being {@code true} only guarantees a compute shader could run, not that
  * the resulting blocks can legally be uploaded as S3TC.
  *
- * <h2>Render-thread warmup requirement (root cause of the BC1-always-off bug)</h2>
+ * <h2>Render-thread warmup requirement</h2>
  * {@code GL.getCapabilities()} returns the {@code GLCapabilities} bound to
  * whichever thread currently has a GL context current -- it is thread-local
  * state inside LWJGL, not a global snapshot. {@link SplitAtlasManager}'s
- * background-executor path ({@code tessera$prepareOpaqueInBackground}) was
- * the first and only caller of {@link #isSupported()} at runtime; that
- * method runs on a {@code Worker-Main-N} stitch thread, which never has a
- * GL context current. {@code GL.getCapabilities()} throws there, the
- * {@code catch (Throwable ignored)} below swallowed it, and {@code false}
- * was memoized into the {@code volatile Boolean supported} field
- * permanently -- {@link #isSupported()} short-circuits on the cached value
- * for the rest of the process, so the driver's real S3TC support was never
- * consulted again even once a GL context existed. This is why every BC1
- * compression attempt logged "SKIPPED (compression unavailable)" for the
- * opaque atlas on every reload, unconditionally, regardless of driver.
- * {@link Bc7GpuSupport} does not exhibit this bug only because
- * {@code Tessera#onClientSetup} happens to call it once via
- * {@code FMLClientSetupEvent#enqueueWork}, which runs on the render thread
- * and warms its cache correctly before any background caller could poison
- * it -- no such warmup existed for this class or {@link Bc1ComputeSupport}.
- * {@link #warmUp()} closes that gap; callers must invoke it from a
- * render-thread context (e.g. {@code FMLClientSetupEvent#enqueueWork},
- * mirroring the existing BC7 warmup) before {@link #isSupported()} can ever
- * be reached from a background thread.
+ * background-executor path can reach {@link #isSupported()} before any
+ * render-thread caller ever has, which would throw inside
+ * {@code GL.getCapabilities()} and, if caught and cached incorrectly,
+ * permanently memoize a false negative regardless of the driver's actual
+ * support. {@link #warmUp()} must be invoked from a render-thread context
+ * (e.g. {@code FMLClientSetupEvent#enqueueWork}) before
+ * {@link #isSupported()} can ever be reached from a background thread --
+ * see {@code Tessera#onClientSetup}, which already does this.
  */
 public final class Bc1TextureFormatSupport {
 
