@@ -3,204 +3,181 @@ name: Build and Package
 on:
   workflow_dispatch: {}
   push:
-    branches:
-      - master
-
-env:
-  CARGO_TERM_COLOR: always
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
 
 jobs:
-  build-native:
-    name: Build native bridge (${{ matrix.platform_dir }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            platform_dir: linux-x86_64
-            target: x86_64-unknown-linux-gnu
-          - os: ubuntu-latest
-            platform_dir: linux-aarch64
-            target: aarch64-unknown-linux-gnu
-          - os: windows-latest
-            platform_dir: windows-x86_64
-            target: x86_64-pc-windows-msvc
-    runs-on: ${{ matrix.os }}
+  # Vendors bc7enc_rdo at the pinned commit (with patches) once, so every native
+  # build compiles exactly the same sources.
+  vendor:
+    name: Fetch bc7enc_rdo sources
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-
-      - name: Install Rust (stable)
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Verify MSVC toolchain is discoverable
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          if (-not (Test-Path $vswhere)) {
-            Write-Error "vswhere.exe not found; MSVC build tools may be missing on this runner image."
-            exit 1
-          }
-          & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-
-      - name: Install Linux build essentials
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config git ca-certificates
-          sudo update-ca-certificates
-
-      - name: Install aarch64 cross toolchain
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross
-
-      - name: Set aarch64 linker env
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
-          echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
-          echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> "$GITHUB_ENV"
-
-      - name: Set RUSTFLAGS for size and link optimization
-        shell: bash
-        run: |
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            echo "RUSTFLAGS=-C link-arg=/OPT:REF -C link-arg=/OPT:ICF -C link-arg=/DEBUG:NONE" >> "$GITHUB_ENV"
-          else
-            echo "RUSTFLAGS=-C link-arg=-Wl,--gc-sections -C link-arg=-s" >> "$GITHUB_ENV"
-          fi
-
-      - name: Cache cargo registry and target dir
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            native/bridge/target
-          key: cargo-${{ matrix.platform_dir }}-${{ hashFiles('native/bridge/Cargo.lock') }}
-          restore-keys: |
-            cargo-${{ matrix.platform_dir }}-
-
-      - name: Clean vendor directory to force re-fetch with patches
-        shell: bash
-        run: |
-          cd native/vendor/bc7enc_rdo
-          rm -f rdo_bc_encoder.h rdo_bc_encoder.cpp \
-                bc7enc.h bc7enc.cpp \
-                ert.h ert.cpp \
-                rgbcx.h rgbcx.cpp rgbcx_table4.h rgbcx_table4_small.h \
-                utils.h utils.cpp \
-                bc7decomp.h bc7decomp.cpp bc7decomp_ref.cpp \
-                dds_defs.h \
-                LICENSE
-
-      - name: Fetch vendored bc7enc_rdo sources with patches
-        shell: bash
+      - name: Run fetch.sh
         working-directory: native/vendor/bc7enc_rdo
         run: |
           chmod +x fetch.sh
           ./fetch.sh
-
-      - name: cargo build --release
-        shell: bash
-        working-directory: native/bridge
-        run: |
-          cargo build --release --target ${{ matrix.target }}
-          echo "==== contents of target/${{ matrix.target }}/release ===="
-          ls -la target/${{ matrix.target }}/release || true
-
-      - name: Stage native library
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "staged-natives/natives/${{ matrix.platform_dir }}"
-          BUILD_DIR="native/bridge/target/${{ matrix.target }}/release"
-          echo "Looking for native library in $BUILD_DIR"
-          ls -la "$BUILD_DIR" || true
-
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            LIB=$(find "$BUILD_DIR" -maxdepth 1 -type f -iname "tessera_bridge.dll" -o -iname "*.dll" | head -n1 || true)
-          else
-            LIB=$(find "$BUILD_DIR" -maxdepth 1 -type f \( -iname "libtessera_bridge.*" -o -iname "*.so" -o -iname "*.dylib" \) | head -n1 || true)
-          fi
-
-          if [ -z "$LIB" ]; then
-            echo "::error::Could not find built native library in $BUILD_DIR"
-            ls -la "$BUILD_DIR"
-            exit 1
-          fi
-
-          echo "Found native library: $LIB"
-          cp "$LIB" "staged-natives/natives/${{ matrix.platform_dir }}/$(basename "$LIB")"
-
-      - name: Upload native artifact
-        uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v5
         with:
-          name: native-${{ matrix.platform_dir }}
-          path: staged-natives/natives/${{ matrix.platform_dir }}/*
+          name: bc7enc-vendor
+          path: native/vendor/bc7enc_rdo/
           if-no-files-found: error
 
-  package-jar:
-    name: Package JAR with merged natives
-    needs: build-native
+  natives-linux:
+    name: Native bridge (linux x86_64 + aarch64)
+    needs: vendor
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          name: bc7enc-vendor
+          path: native/vendor/bc7enc_rdo
+      # Only for the JNI headers (jni.h); build-linux.sh mounts $JAVA_HOME/include.
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      # Ubuntu 20.04 container (glibc 2.31 toolchain, binaries need glibc >= 2.17),
+      # aarch64 cross-compiled.
+      - name: Build with Docker
+        run: |
+          chmod +x native/build-linux.sh
+          ./native/build-linux.sh
+      - uses: actions/upload-artifact@v5
+        with:
+          name: natives-linux
+          path: natives/linux/
+          if-no-files-found: error
 
-      - name: Set up JDK
-        uses: actions/setup-java@v5
+  natives-windows:
+    name: Native bridge (windows x86_64)
+    needs: vendor
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          name: bc7enc-vendor
+          path: native/vendor/bc7enc_rdo
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Build with CMake + MSVC
+        shell: bash
+        run: |
+          cmake -S native -B build-native/windows -A x64
+          cmake --build build-native/windows --config Release
+          mkdir -p natives/windows/x86_64
+          cp build-native/windows/Release/tessera_bridge.dll natives/windows/x86_64/
+      - uses: actions/upload-artifact@v5
+        with:
+          name: natives-windows
+          path: natives/windows/
+          if-no-files-found: error
+
+  package:
+    name: Package JAR with natives
+    needs: [natives-linux, natives-windows]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Tessera
+    steps:
+      # settings.gradle.kts needs ../panzer-build-logic (includeBuild + common TOML),
+      # so both repos are checked out side by side under the workspace.
+      - uses: actions/checkout@v5
+        with:
+          path: Tessera
+      - uses: actions/checkout@v5
+        with:
+          repository: PanzerDevOrg/PanzerBuildLogic
+          path: panzer-build-logic
+
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
 
-      - name: Download all native artifacts
-        uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v5
         with:
-          pattern: native-*
-          path: downloaded-natives
+          name: natives-linux
+          path: Tessera/natives/linux
+      - uses: actions/download-artifact@v5
+        with:
+          name: natives-windows
+          path: Tessera/natives/windows
 
-      - name: Merge natives into project resources
-        run: |
-          mkdir -p src/main/resources/assets/tessera/natives
-          for dir in downloaded-natives/native-*; do
-            platform_dir=$(basename "$dir" | sed 's/^native-//')
-            mkdir -p "src/main/resources/assets/tessera/natives/$platform_dir"
-            cp "$dir"/* "src/main/resources/assets/tessera/natives/$platform_dir/"
-          done
-          echo "Merged files:"
-          find src/main/resources/assets/tessera/natives -type f
-
+      # Celeris resolves from https://panzerdevorg.github.io/Celeris/maven, so the
+      # Celeris version in mod.stonecutter.properties.toml must have been released
+      # (tagged) first. strict: every bundled platform's native must be present.
       - name: Build JAR
         run: |
           chmod +x ./gradlew
-          ./gradlew buildAndCollect -Ptessera.skipNativeBuild=true -Ptessera.fatJar=true --stacktrace
+          ./gradlew buildAndCollect -Ptessera.native.strict=true --stacktrace
 
       - name: Verify JAR contains all natives
         run: |
+          set -euo pipefail
           JAR_PATH=$(find build/libs -mindepth 2 -maxdepth 2 -name "*.jar" \
             ! -name "*-sources.jar" ! -name "*-dev.jar" | sort | head -n1)
-          if [ -z "$JAR_PATH" ]; then
-            echo "::error::No candidate mod JAR found under build/libs/<version>/"
-            find build/libs -type f
-            exit 1
-          fi
+          [ -n "$JAR_PATH" ] || { echo "::error::No mod JAR under build/libs/<version>/"; find build/libs -type f; exit 1; }
           echo "Inspecting $JAR_PATH"
-          unzip -l "$JAR_PATH" | grep natives || true
           for plat in linux-x86_64 linux-aarch64 windows-x86_64; do
-            if ! unzip -l "$JAR_PATH" | grep -q "natives/$plat/"; then
-              echo "::error::Missing natives for $plat in $JAR_PATH"
-              exit 1
-            fi
+            unzip -l "$JAR_PATH" | grep -q "natives/$plat/" || { echo "::error::Missing natives for $plat in $JAR_PATH"; exit 1; }
           done
 
-      - name: Upload JAR artifact
-        uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v5
         with:
           name: tessera-jar
-          path: build/libs/**/*.jar
+          path: Tessera/build/libs/**/*.jar
           if-no-files-found: error
+
+  release:
+    # Uploads the jar to Modrinth and CurseForge on v* tags.
+    # Configure once per repository (Settings > Secrets and variables > Actions):
+    #   variables: MODRINTH_ID, CURSEFORGE_ID   (project IDs; a missing one skips that site)
+    #   secrets:   MODRINTH_TOKEN, CURSEFORGE_TOKEN
+    # Game versions, loader and the Celeris dependency are read from the jar's
+    # neoforge.mods.toml (Celeris must be published on both sites first).
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Refuse to release if the tag disagrees with [mod] version.
+      - name: Check tag matches mod version
+        run: |
+          MOD_VERSION=$(sed -n '/^\[mod\]/,/^\[/{s/^version *= *"\(.*\)"/\1/p}' mod.stonecutter.properties.toml)
+          [ "v$MOD_VERSION" = "$GITHUB_REF_NAME" ] || { echo "::error::Tag $GITHUB_REF_NAME != mod version $MOD_VERSION"; exit 1; }
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: tessera-jar
+          path: jars
+
+      - name: Locate jar
+        id: jar
+        run: |
+          JAR=$(find jars -name "tessera-*.jar" ! -name "*-sources.jar" ! -name "*-dev.jar" | sort | head -n1)
+          [ -n "$JAR" ] || { echo "::error::No Tessera jar"; find jars -type f; exit 1; }
+          MC=$(basename "$JAR" .jar); MC=${MC##*+}
+          echo "path=$JAR" >> "$GITHUB_OUTPUT"
+          echo "version=${GITHUB_REF_NAME#v}+$MC" >> "$GITHUB_OUTPUT"
+
+      - uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          modrinth-id: ${{ vars.MODRINTH_ID }}
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          curseforge-id: ${{ vars.CURSEFORGE_ID }}
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+          files: ${{ steps.jar.outputs.path }}
+          name: Tessera ${{ steps.jar.outputs.version }}
+          version: ${{ steps.jar.outputs.version }}
+          loaders: neoforge
+          changelog: See https://github.com/${{ github.repository }}/commits/${{ github.ref_name }}

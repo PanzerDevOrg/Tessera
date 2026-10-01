@@ -20,6 +20,15 @@ versionRange = "${neo_version_range}"
 ordering = "NONE"
 side = "CLIENT"
 
+# Tessera links against Celeris classes (async queue, SIMD facade). Declaring it
+# makes NeoForge show its "missing dependency" screen instead of a NoClassDefFoundError.
+[[dependencies."${mod_id}"]]
+modId = "celeris"
+type = "required"
+versionRange = "${celeris_version_range}"
+ordering = "AFTER"
+side = "CLIENT"
+
 [[dependencies."${mod_id}"]]
 modId = "minecraft"
 type = "required"

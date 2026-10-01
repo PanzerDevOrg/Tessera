@@ -58,16 +58,9 @@ with open(path) as f:
     content = f.read()
 
 content = content.replace('#include "lodepng.h"\n', '')
-# Tessera bug fix: utils.cpp also unconditionally #includes "miniz.h" on
-# its own separate line, immediately after the lodepng.h include this
-# function already strips. Neither miniz.h nor miniz.cpp are vendored by
-# this script's FILES list (nor by build.rs's BC7ENC_RDO_FILES/sources
-# arrays) -- only get_deflate_size() below actually needs it, and that
-# function is stubbed out a few lines down for the same "not vendored"
-# reason lodepng's load_png/save_png are. Leaving this #include in place
-# after removing lodepng.h's would still fail the build with a missing
-# header, since nothing else in this repo provides miniz.h. Removing it
-# here keeps that failure from ever reaching a from-scratch build.
+# utils.cpp also #includes "miniz.h", which is not vendored (FILES above).
+# Its only user, get_deflate_size(), is stubbed out below together with
+# lodepng's load_png/save_png, so the include is removed as well.
 content = content.replace('#include "miniz.h"\n', '')
 
 old_load_png = '''bool load_png(const char* pFilename, image_u8& img)

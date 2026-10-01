@@ -1,9 +1,9 @@
 // tessera_bridge.cpp
 
-#include "tessera_bridge.h"
 #include "rdo_bc_encoder.h"
 
 #include <cstring>
+#include <cstdint>
 #include <algorithm>
 #include <thread>
 
@@ -95,120 +95,81 @@ rdo_bc::rdo_bc_params Bc1ParamsForPreset(int32_t quality_preset) {
 
 // Core Encoding Implementation
 
-/// Shared encoding implementation for both BC7 and BC1.
+/// Encodes straight into a caller-owned buffer: no output allocation, no
+/// second copy on the Java side.
 ///
-/// This function handles the common workflow:
-/// 1. Build the source image from RGBA data
-/// 2. Initialize and run the encoder with the provided parameters
-/// 3. Copy the compressed output to a new buffer
-///
-/// @param rgba8      Pointer to RGBA pixel data
-/// @param width      Image width in pixels
-/// @param height     Image height in pixels
-/// @param params     Encoder parameters (BC7 or BC1)
-/// @param out_result Output structure to receive compressed data
-///
-/// @return 1 on success, 0 on failure
-///
-/// @note The output buffer is allocated with `new[]` and must be freed
-///       by the caller using the appropriate free function.
-static int32_t EncodeWithParams(
+/// @return bytes written, -1 on invalid input/encoder failure, or
+///         -(required size) - 2 if out_capacity is too small.
+static int64_t EncodeInto(
     const uint8_t* rgba8,
     uint32_t width,
     uint32_t height,
     const rdo_bc::rdo_bc_params& params,
-    TesseraCompressResult* out_result
+    uint8_t* out,
+    uint64_t out_capacity
 ) {
-    // Validate inputs
-    if (rgba8 == nullptr || out_result == nullptr || width == 0 || height == 0) {
-        return 0;
+    if (rgba8 == nullptr || out == nullptr || width == 0 || height == 0) {
+        return -1;
     }
-
-    // Build source image from RGBA data
     utils::image_u8 source_image(width, height);
-    size_t pixel_count = static_cast<size_t>(width) * height;
-    size_t data_size = pixel_count * 4;
-    std::memcpy(source_image.get_pixels().data(), rgba8, data_size);
+    std::memcpy(source_image.get_pixels().data(), rgba8, static_cast<size_t>(width) * height * 4);
 
-    // Initialize and run encoder
     rdo_bc::rdo_bc_params local_params = params;
     rdo_bc::rdo_bc_encoder encoder;
-
-    if (!encoder.init(source_image, local_params)) {
-        return 0;
+    if (!encoder.init(source_image, local_params) || !encoder.encode()) {
+        return -1;
     }
-
-    if (!encoder.encode()) {
-        return 0;
+    uint64_t size = encoder.get_total_blocks_size_in_bytes();
+    if (size > out_capacity) {
+        return -static_cast<int64_t>(size) - 2;
     }
-
-    // Allocate and copy the compressed output
-    uint32_t output_size = encoder.get_total_blocks_size_in_bytes();
-    uint8_t* output = new uint8_t[output_size];
-    std::memcpy(output, encoder.get_blocks(), output_size);
-
-    // Set output fields
-    out_result->data = output;
-    out_result->len = output_size;
-    return 1;
+    std::memcpy(out, encoder.get_blocks(), size);
+    return static_cast<int64_t>(size);
 }
 
-// Exported C API - BC7 Compression
+// JNI entry points
+//
+// JNI rather than java.lang.foreign: FFM is preview-only on Java 21 (the
+// runtime Minecraft 1.21.1 ships), so it would not load for players without
+// --enable-preview. JNI works on every JDK with no flags, and with direct
+// ByteBuffers on both sides nothing is copied across the boundary.
+
+#include <jni.h>
+
+/// Bumped on any signature/semantics change; checked by JniCompressionBackend
+/// so a stale library in the extraction cache is rejected instead of misbehaving.
+static constexpr jint kTesseraJniAbiVersion = 1;
 
 extern "C" {
 
-int32_t tessera_bc7_is_available() {
-    // BC7 is always available when using bc7enc_rdo
-    return 1;
+JNIEXPORT jint JNICALL
+Java_com_panzer_mods_tessera_compress_backend_JniCompressionBackend_nativeAbiVersion(JNIEnv*, jclass) {
+    return kTesseraJniAbiVersion;
 }
 
-int32_t tessera_bc7_compress(
-    const uint8_t* rgba8,
-    uint32_t width,
-    uint32_t height,
-    int32_t quality_preset,
-    TesseraCompressResult* out_result
+/// @param src  direct ByteBuffer, RGBA8 at its base address (Java passes a slice)
+/// @param dst  direct ByteBuffer receiving BC blocks at its base address
+/// @return bytes written, -1 on failure, or -(required) - 2 if dst is too small
+JNIEXPORT jlong JNICALL
+Java_com_panzer_mods_tessera_compress_backend_JniCompressionBackend_nativeCompress(
+    JNIEnv* env, jclass, jobject src, jint width, jint height, jint quality, jboolean bc7, jobject dst
 ) {
-    return EncodeWithParams(
-        rgba8,
-        width,
-        height,
-        ParamsForPreset(quality_preset),
-        out_result
-    );
-}
-
-void tessera_bc7_free(uint8_t* data, uint32_t len) {
-    (void)len;  // Suppress unused parameter warning
-    delete[] data;
-}
-
-// Exported C API - BC1 Compression
-
-int32_t tessera_bc1_is_available() {
-    // BC1 is always available when using bc7enc_rdo
-    return 1;
-}
-
-int32_t tessera_bc1_compress(
-    const uint8_t* rgba8,
-    uint32_t width,
-    uint32_t height,
-    int32_t quality_preset,
-    TesseraCompressResult* out_result
-) {
-    return EncodeWithParams(
-        rgba8, 
-        width, 
-        height, 
-        Bc1ParamsForPreset(quality_preset), 
-        out_result
-    );
-}
-
-void tessera_bc1_free(uint8_t* data, uint32_t len) {
-    (void)len;  // Suppress unused parameter warning
-    delete[] data;
+    if (width <= 0 || height <= 0) {
+        return -1;
+    }
+    auto* in = static_cast<const uint8_t*>(env->GetDirectBufferAddress(src));
+    auto* out = static_cast<uint8_t*>(env->GetDirectBufferAddress(dst));
+    jlong in_capacity = env->GetDirectBufferCapacity(src);
+    jlong out_capacity = env->GetDirectBufferCapacity(dst);
+    // Bounds are re-checked here, not trusted from Java: an undersized input
+    // would otherwise be an out-of-bounds native read.
+    if (in == nullptr || out == nullptr || in_capacity < 0 || out_capacity < 0
+        || static_cast<uint64_t>(in_capacity) < static_cast<uint64_t>(width) * static_cast<uint64_t>(height) * 4u) {
+        return -1;
+    }
+    const rdo_bc::rdo_bc_params params = bc7 ? ParamsForPreset(quality) : Bc1ParamsForPreset(quality);
+    return static_cast<jlong>(EncodeInto(in, static_cast<uint32_t>(width), static_cast<uint32_t>(height),
+                                         params, out, static_cast<uint64_t>(out_capacity)));
 }
 
 }  // extern "C"

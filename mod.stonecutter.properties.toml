@@ -1,0 +1,55 @@
+# Tessera build configuration. Merged at configuration time with
+# ../panzer-build-logic/common.stonecutter.properties.toml (see settings.gradle.kts):
+# any table declared here replaces the common table of the same name.
+
+[plugins]
+stonecutter = "0.9.7"
+foojay = "1.0.0"
+moddev = "2.0.143"
+
+# No [jvm.modules.*] tables: Tessera needs no preview features or extra modules.
+# Native access goes through JNI (works on every JDK without flags), and SIMD
+# math goes through Celeris's VectorOperations facade, which falls back to
+# scalar code when jdk.incubator.vector is not enabled.
+
+[mod]
+id = "tessera"
+name = "Tessera"
+group = "com.panzer.mods"
+package = "com.panzer.mods.tessera"
+version = "0.1.0"
+# SPDX identifier (AGPL v3, no "or later" clause -- see src/main/resources/LICENSE).
+license = "AGPL-3.0-only"
+resources_license = "CC-BY-NC-SA-4.0"
+authors = "Bichal"
+description = "Tessera: live BC7/BC1 atlas compression for low-end and integrated GPU hardware."
+side = "CLIENT"
+issues = "https://github.com/PanzerDevOrg/Tessera/issues"
+banner = ""
+
+# Celeris is both a compile dependency (com.panzer.mods:celeris-<mc>:<version>,
+# from mavenLocal() or https://panzerdevorg.github.io/Celeris/maven) and a
+# required runtime mod (declared in neoforge.mods.toml).
+# version: artifact version compiled against.
+# version_range: versions NeoForge accepts at runtime.
+# (No end-of-line comments: the build's TOML readers do not strip them.)
+[depends_on.celeris]
+version = "0.1.0"
+version_range = "[0.1.0,)"
+
+[stonecutter]
+versions = ["1.21.1"]
+vcs_version = "1.21.1"
+
+[compression]
+# BC7 quality preset 0-7 used by dev runs (tessera.compression.defaultQualityPreset).
+default_quality_preset = 3
+
+# Pinned per mod: the exact NeoForge build Tessera is tested against, which
+# overrides the shared ["1.21.1"] block in the common TOML.
+["1.21.1"]
+minecraft_version = "1.21.1"
+minecraft_version_range = "[1.21.1,1.21.2)"
+neo_version = "21.1.209"
+neo_version_range = "[21.1,21.2)"
+parchment_mappings_version = "2024.11.17"
