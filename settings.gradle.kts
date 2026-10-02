@@ -2,6 +2,13 @@ val commonToml = File(rootDir, "../panzer-build-logic/common.stonecutter.propert
 val modToml = File(rootDir, "mod.stonecutter.properties.toml")
 val mergedToml = File(rootDir, "stonecutter.properties.toml")
 
+// Declare both source TOMLs as configuration-cache inputs. Reads through plain
+// File APIs here are not reliably fingerprinted, which let an edited TOML build
+// with stale values from the cache; providers.fileContents() is always tracked.
+listOf(modToml, commonToml).filter { it.exists() }.forEach {
+    providers.fileContents(layout.rootDirectory.file(it.relativeTo(rootDir).invariantSeparatorsPath)).asBytes.get()
+}
+
 if (!commonToml.exists()) {
     error("Strict Configuration Error: shared 'common.stonecutter.properties.toml' was not found at '${commonToml.path}'. Check that '../panzer-build-logic' exists next to this project.")
 }
