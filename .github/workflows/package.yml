@@ -118,7 +118,7 @@ jobs:
       - name: Build JAR
         run: |
           chmod +x ./gradlew
-          ./gradlew buildAndCollect -Ptessera.native.strict=true --stacktrace
+          ./gradlew buildAndCollect -Ptessera.native.strict=true --no-watch-fs --stacktrace
 
       - name: Verify JAR contains all natives
         run: |
