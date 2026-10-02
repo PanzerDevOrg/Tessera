@@ -61,21 +61,13 @@ shaders and other mods are untouched.
 - `AtlasCompressEvent.Pre` (cancellable; lets you choose BC7 or BC1 per atlas) and `AtlasCompressEvent.Post` (bytes
   saved and resident), fired on `NeoForge.EVENT_BUS`.
 
-## Benchmarks
-
-#### Vanilla:
+## Savings
 
 <div align="center">
 
-![Benchmark Vanilla](./docs/media/benchmark_vanilla.png)
-
-</div>
-
-#### Heavy modpack (**All The Mods 10**):
-
-<div align="center">
-
-![Benchmark ATM10](./docs/media/benchmark_atm10.png)
+| Version 0.1 (Old) | Version 0.2 (New) |
+|:---:|:---:|
+| <img alt="Old Active Mod Saving 6.13MB" src="./docs/media/old_active_mod.png"> | <img alt="New Active Mod Saving 11.88MB" src="./docs/media/active_mod.png"> |
 
 </div>
 
@@ -87,15 +79,15 @@ shaders and other mods are untouched.
 
 ## Installation & Requirements
 
-| Requirement   | Version                                                                       |
-|---------------|-------------------------------------------------------------------------------|
-| Minecraft     | `1.21.1`                                                                      |
-| Mod loader    | [NeoForge](https://neoforged.net/) `21.1.x`                                   |
-| Java          | `21+`                                                                         |
-| Dependency    | [Celeris](https://github.com/PanzerDevOrg/Celeris) `0.1.0+`                   |
-| GPU           | BC7 support (`GL_ARB_texture_compression_bptc`, any OpenGL 4.2+ GPU)          |
-| Native encoder| Windows x86_64, Linux x86_64 / AArch64; other platforms use the Java encoder  |
-| macOS         | Not supported (OpenGL 4.1, no BC7)                                            |
+| Requirement    | Version                                                                      |
+|----------------|------------------------------------------------------------------------------|
+| Minecraft      | `1.21.1`                                                                     |
+| Mod loader     | [NeoForge](https://neoforged.net/) `21.1.x`                                  |
+| Java           | `21+`                                                                        |
+| Dependency     | [Celeris](https://github.com/PanzerDevOrg/Celeris) `0.1.0+`                  |
+| GPU            | BC7 support (`GL_ARB_texture_compression_bptc`, any OpenGL 4.2+ GPU)         |
+| Native encoder | Windows x86_64, Linux x86_64 / AArch64; other platforms use the Java encoder |
+| macOS          | Not supported (OpenGL 4.1, no BC7)                                           |
 
 1. Install NeoForge for Minecraft 1.21.1.
 2. Put **Tessera** and **Celeris** in your `mods/` folder.
@@ -108,10 +100,10 @@ shaders and other mods are untouched.
 Tessera and Celeris work out of the box. A few JVM flags unlock Celeris's fastest code paths (SIMD math used by
 Tessera's atlas analysis, plus off-heap memory and native zstd on Java 21):
 
-| Minecraft (Java)       | Add to your JVM arguments                                                              |
-|------------------------|----------------------------------------------------------------------------------------|
+| Minecraft (Java)       | Add to your JVM arguments                                                                |
+|------------------------|------------------------------------------------------------------------------------------|
 | 1.21.x (Java 21)       | `--enable-preview --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED` |
-| 26.x and up (Java 25+) | `--add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED`                 |
+| 26.x and up (Java 25+) | `--add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED`                  |
 
 Where to put them: **Modrinth App** → instance → *Settings → Java and memory → Java arguments*; **CurseForge App** →
 *Settings → Minecraft → Additional arguments*; **Prism Launcher** → instance → *Settings → Java → JVM arguments*.
@@ -123,12 +115,12 @@ Java 21 that Minecraft 1.21.x ships with.
 
 `config/tessera-client.toml` (also editable from the in-game mod settings screen):
 
-| Option                     | Default         | Effect                                                         |
-|----------------------------|-----------------|----------------------------------------------------------------|
-| `compressionQuality`       | `4`             | Native BC7 quality preset, `0` (fastest) to `7` (best)          |
-| `disableNativeCompression` | `false`         | Turns all compression off; atlases stay vanilla RGBA8          |
-| `vramBudgetTargetMb`       | `2048`          | Budget used when the GPU's VRAM can't be queried                |
-| `cacheDirectory`           | `tessera-cache` | Disk cache folder, relative to the game directory              |
+| Option                     | Default         | Effect                                                 |
+|----------------------------|-----------------|--------------------------------------------------------|
+| `compressionQuality`       | `4`             | Native BC7 quality preset, `0` (fastest) to `7` (best) |
+| `disableNativeCompression` | `false`         | Turns all compression off; atlases stay vanilla RGBA8  |
+| `vramBudgetTargetMb`       | `2048`          | Budget used when the GPU's VRAM can't be queried       |
+| `cacheDirectory`           | `tessera-cache` | Disk cache folder, relative to the game directory      |
 
 The disk cache size limit defaults to 512 MB; change it with `-Dtessera.cache.maxMB=<MB>`.
 
@@ -209,11 +201,11 @@ src/main/java/com/panzer/mods/tessera/
 
 ## License
 
-| Content                             | License                                                                                                     |
-|-------------------------------------|-------------------------------------------------------------------------------------------------------------|
-| Source code (Java, C++)             | [AGPL-3.0-only](https://www.gnu.org/licenses/agpl-3.0.html) — see [`LICENSE-AGPL`](./LICENSE-AGPL)          |
-| Artwork, logos, and branding assets | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) — see [`LICENSE-CC`](./LICENSE-CC)    |
-| Vendored bc7enc_rdo                 | MIT / public domain — see [`native/vendor/bc7enc_rdo/LICENSE`](./native/vendor/bc7enc_rdo/LICENSE)          |
+| Content                             | License                                                                                                  |
+|-------------------------------------|----------------------------------------------------------------------------------------------------------|
+| Source code (Java, C++)             | [AGPL-3.0-only](https://www.gnu.org/licenses/agpl-3.0.html) — see [`LICENSE-AGPL`](./LICENSE-AGPL)       |
+| Artwork, logos, and branding assets | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) — see [`LICENSE-CC`](./LICENSE-CC) |
+| Vendored bc7enc_rdo                 | MIT / public domain — see [`native/vendor/bc7enc_rdo/LICENSE`](./native/vendor/bc7enc_rdo/LICENSE)       |
 
 **Source code:** you may study, modify and redistribute it under the AGPL; if you run a modified version as a network
 service, its source must be available to that service's users.

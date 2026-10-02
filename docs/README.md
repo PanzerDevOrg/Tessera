@@ -3,11 +3,11 @@
 Everything published outside GitHub lives here, one file per purpose, so a
 release or a page update is a one-file change.
 
-| Path | Published to | When |
-|---|---|---|
-| `changelogs/<version>.md` | Changelog of that version on Modrinth and CurseForge | On the `v<version>` tag (CI fails if the file is missing) |
-| `modrinth/description.md` | The Modrinth project page | On every push to `master` |
-| `media/` | Images used by the READMEs (Modrinth loads them from raw.githubusercontent.com) | — |
+| Path                      | Published to                                                                    | When                                                      |
+|---------------------------|---------------------------------------------------------------------------------|-----------------------------------------------------------|
+| `changelogs/<version>.md` | Changelog of that version on Modrinth and CurseForge                            | On the `v<version>` tag (CI fails if the file is missing) |
+| `modrinth/description.md` | The Modrinth project page                                                       | On every push to `master`                                 |
+| `media/`                  | Images used by the READMEs (Modrinth loads them from raw.githubusercontent.com) | —                                                         |
 
 ## Releasing a new version
 
