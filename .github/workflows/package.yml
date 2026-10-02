@@ -144,7 +144,8 @@ jobs:
     #   secrets:   MODRINTH_TOKEN, CURSEFORGE_TOKEN
     # Game versions, loader and the Celeris dependency are read from the jar's
     # neoforge.mods.toml (Celeris must be published on both sites first).
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Skipped entirely until at least one site's project ID is configured.
+    if: startsWith(github.ref, 'refs/tags/v') && (vars.MODRINTH_ID != '' || vars.CURSEFORGE_ID != '')
     needs: package
     runs-on: ubuntu-latest
     steps:
