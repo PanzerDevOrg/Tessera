@@ -171,6 +171,13 @@ jobs:
           echo "path=$JAR" >> "$GITHUB_OUTPUT"
           echo "version=${GITHUB_REF_NAME#v}+$MC" >> "$GITHUB_OUTPUT"
 
+      # The "## [<version>]" section of CHANGELOG.md becomes the published changelog.
+      - name: Extract changelog
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          awk -v v="$VERSION" 'index($0,"## ["v"]")==1{f=1;next} /^## \[/{if(f)exit} f' CHANGELOG.md > release-notes.md
+          [ -s release-notes.md ] || { echo "::error::CHANGELOG.md has no '## [$VERSION]' section"; exit 1; }
+
       - uses: Kir-Antipov/mc-publish@v3.3
         with:
           modrinth-id: ${{ vars.MODRINTH_ID }}
@@ -181,4 +188,4 @@ jobs:
           name: Tessera ${{ steps.jar.outputs.version }}
           version: ${{ steps.jar.outputs.version }}
           loaders: neoforge
-          changelog: See https://github.com/${{ github.repository }}/commits/${{ github.ref_name }}
+          changelog-file: release-notes.md
