@@ -1,0 +1,27 @@
+name: Sync Modrinth description
+
+# Updates the Modrinth project page from docs/modrinth/description.md.
+# Runs only when that file changes (or manually), never rebuilds the mod.
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [master]
+    paths: ["docs/modrinth/**"]
+
+jobs:
+  sync:
+    if: vars.MODRINTH_ID != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Update Modrinth description
+        env:
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          jq -n --rawfile body docs/modrinth/description.md '{body: $body}' > body.json
+          STATUS=$(curl -sS -o response.txt -w '%{http_code}' -X PATCH \
+            "https://api.modrinth.com/v2/project/${{ vars.MODRINTH_ID }}" \
+            -H "Authorization: $MODRINTH_TOKEN" -H "Content-Type: application/json" \
+            -H "User-Agent: PanzerDevOrg/Tessera CI" --data @body.json)
+          [ "$STATUS" = 204 ] || { echo "::error::Modrinth returned HTTP $STATUS"; cat response.txt; exit 1; }

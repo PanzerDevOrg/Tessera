@@ -5,7 +5,13 @@ on:
   push:
     branches: [master]
     tags: ["v*"]
+    # Docs-only commits don't rebuild anything (path filters never apply to tag
+    # pushes, so releases always run). The Modrinth page has its own workflow.
+    paths-ignore: ["docs/**", "**.md", "LICENSE*", ".gitignore"]
   pull_request:
+    # Docs-only commits don't rebuild anything (path filters never apply to tag
+    # pushes, so releases always run). The Modrinth page has its own workflow.
+    paths-ignore: ["docs/**", "**.md", "LICENSE*", ".gitignore"]
 
 jobs:
   # Vendors bc7enc_rdo at the pinned commit (with patches) once, so every native
@@ -189,24 +195,3 @@ jobs:
           version: ${{ steps.jar.outputs.version }}
           loaders: neoforge
           changelog-file: docs/changelogs/${{ steps.jar.outputs.mod_version }}.md
-
-  modrinth-description:
-    # Keeps the Modrinth project page in sync with docs/modrinth/description.md:
-    # on every push to master and every release tag. Idempotent.
-    if: >-
-      vars.MODRINTH_ID != '' && github.event_name == 'push' &&
-      (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - name: Update Modrinth description
-        env:
-          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
-        run: |
-          set -euo pipefail
-          jq -n --rawfile body docs/modrinth/description.md '{body: $body}' > body.json
-          STATUS=$(curl -sS -o response.txt -w '%{http_code}' -X PATCH \
-            "https://api.modrinth.com/v2/project/${{ vars.MODRINTH_ID }}" \
-            -H "Authorization: $MODRINTH_TOKEN" -H "Content-Type: application/json" \
-            -H "User-Agent: PanzerDevOrg/Tessera CI" --data @body.json)
-          [ "$STATUS" = 204 ] || { echo "::error::Modrinth returned HTTP $STATUS"; cat response.txt; exit 1; }
