@@ -1,50 +1,40 @@
 # Changelog
 
-Each release section below is published as the changelog on Modrinth and CurseForge.
+Each `## [version]` section is published as that release's changelog on Modrinth and CurseForge.
 
 ## [0.2.0] - 2026-10-02
 
-# Tessera v0.2.0 (1.21.1) Changelog
+# Changelog: Tessera v0.2.0 (1.21.1)
 
-## A rebuilt compression engine: the whole block atlas is now compressed (animations included), with no launch flags, on every Java 21+ install.
-
-> **Requires [Celeris](https://modrinth.com/mod/celeris) 0.1.0 or newer.**
+Rebuilt compression engine: every atlas, including the block atlas with its animations, is now compressed to BC7 in place, with no launch flags required. Now requires **Celeris** 0.1.0 or newer.
 
 ---
 
 ## Key Features & Changes
 
-* **In-Place Atlas Compression**: Atlases are re-encoded to BC7 right after vanilla uploads them, with their full mip chain. UVs, chunk meshing, lighting and shaders are untouched, so it works alongside other rendering mods.
-* **The Block Atlas Is Compressed Too**: Previously skipped because of animated sprites. Water, lava, fire and every other animation keep playing on the compressed atlas: frames are written as BC blocks, keyframes are cached, and the smallest mip levels are patched block by block.
-* **New Native Bridge (JNI, no flags)**: The native encoder now loads on plain Java 21 without `--enable-preview`, and copies nothing between Java and native code. Bundled for **Windows x86_64**, **Linux x86_64** and **Linux AArch64** (glibc 2.17+), built from source in CI.
-* **Pure-Java Fallback Encoder**: On any other platform, or if the native library can't load, Tessera keeps compressing with its own Java BC7/BC1 encoder instead of turning off.
-* **No More Fringes**: Transparent pixels are colour-bled before encoding, fixing white/grey pixels on seagrass, cutout blocks and some GUI buttons.
-* **Off the Render Thread**: Encoding runs in the background; only the GPU upload happens on the render thread, so resource reloads no longer stall the game.
-* **Disk Cache**: Compressed atlases are cached on disk (size-capped, least recently used entries evicted), so unchanged atlases aren't re-encoded on the next launch.
-* **Developer API**: `AtlasCompressEvent.Pre` (cancel, or choose BC7/BC1 per atlas) and `AtlasCompressEvent.Post` (bytes saved and resident) are now actually fired.
+* **In-Place Atlas Compression**: Atlases are re-encoded to BC7 right after vanilla uploads them, keeping their full mip chain. UVs, chunk meshing, lighting and shaders are untouched.
+* **Animated Block Atlas Support**: The block atlas is no longer skipped. Water, lava, fire and every other animated sprite keep animating; frames are written as BC blocks with cached keyframes.
+* **New Native Bridge**: The bundled `bc7enc_rdo` encoder now loads through JNI on plain Java 21 (no `--enable-preview`), for **Windows x86_64**, **Linux x86_64** and **Linux AArch64**.
+* **Pure-Java Fallback Encoder**: On any other platform, or if the native library can't load, atlases are still compressed by Tessera's own Java encoder.
+* **Background Encoding**: Compression runs off the render thread, so resource reloads no longer stall the game.
+* **Persistent Disk Cache**: Compressed atlases are cached on disk (size-capped), so unchanged atlases aren't re-encoded on the next launch.
+* **Transparency Fix**: Fixed white/grey pixels on seagrass, cutout blocks and some GUI buttons.
+* **Debug Overlay Fix**: VRAM savings in the F3 overlay no longer add up on every reload or quality change.
+* **Developer API**: `AtlasCompressEvent.Pre` (cancel, or choose BC7/BC1 per atlas) and `AtlasCompressEvent.Post` are now fired.
+* **Removed Options**: `disableAnimationsAtlases` and `dedupSkipDuplicateEncoding`, no longer needed.
 
 ---
 
-## Fixes
+## Performance
 
-* The F3 overlay no longer adds up savings on every reload or quality change (15 MB → 30 MB → 45 MB…).
-* The VRAM budget now uses the real GPU memory and tracks Tessera's total, instead of checking each atlas alone.
-* The compression quality setting is now applied (it was ignored).
-* BC1 flat blocks no longer turn transparent black in some colours.
-* Native memory leak on resource reload fixed.
-* Changing quality settings no longer reuses stale entries from the disk cache.
-
----
-
-## Removed
-
-* The `disableAnimationsAtlases` and `dedupSkipDuplicateEncoding` config options (animations no longer need to be frozen to compress an atlas).
+* The block atlas, previously left uncompressed, now gets the same up to **75% VRAM reduction** as every other atlas.
+* No more frame stalls while atlases are being compressed during resource reloads.
 
 ## [0.1.0] - 2026-08-07
 
-# Tessera v0.1.0 (1.21.1) Changelog
+# Changelog: Tessera v0.1.0 (1.21.1)
 
-## First public release of **Tessera**, a high-performance, GPU-first VRAM optimization engine for NeoForge 1.21.1 designed to dramatically reduce the VRAM footprint of texture-heavy modpacks.
+First public release of **Tessera**, a high-performance, GPU-first VRAM optimization engine for NeoForge 1.21.1 designed to dramatically reduce the VRAM footprint of texture-heavy modpacks.
 
 ---
 
