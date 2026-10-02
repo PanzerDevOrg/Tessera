@@ -103,6 +103,22 @@ shaders and other mods are untouched.
 
 > Tessera is **client-side only**; servers don't need it.
 
+## ⚡ Maximum performance (optional JVM flags)
+
+Tessera and Celeris work out of the box. A few JVM flags unlock Celeris's fastest code paths (SIMD math used by
+Tessera's atlas analysis, plus off-heap memory and native zstd on Java 21):
+
+| Minecraft (Java)       | Add to your JVM arguments                                                              |
+|------------------------|----------------------------------------------------------------------------------------|
+| 1.21.x (Java 21)       | `--enable-preview --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED` |
+| 26.x and up (Java 25+) | `--add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED`                 |
+
+Where to put them: **Modrinth App** → instance → *Settings → Java and memory → Java arguments*; **CurseForge App** →
+*Settings → Minecraft → Additional arguments*; **Prism Launcher** → instance → *Settings → Java → JVM arguments*.
+
+Without flags nothing breaks: each feature falls back to a pure-Java path. Use `--enable-preview` only with the
+Java 21 that Minecraft 1.21.x ships with.
+
 ## Configuration
 
 `config/tessera-client.toml` (also editable from the in-game mod settings screen):
@@ -166,9 +182,16 @@ The prebuilt binaries are committed under `natives/<os>/<arch>/` so they can be 
 `native/` on every push (`.github/workflows/package.yml`) and bundles those fresh builds into the released jar; you
 only need to rebuild them locally when changing `native/`.
 
+### Releases, changelogs and the Modrinth page
+
+Everything published outside GitHub lives in [`docs/`](./docs): one changelog per version in
+`docs/changelogs/<version>.md`, and the Modrinth page in `docs/modrinth/description.md` (synced on every push to
+`master`). See [`docs/README.md`](./docs/README.md) for the release steps.
+
 ### Project layout
 
 ```
+docs/                   # changelogs/, modrinth/, media/ (see docs/README.md)
 native/
   CMakeLists.txt        # JNI library build
   build-linux.sh        # Linux x86_64 + aarch64 build in Docker
@@ -205,7 +228,7 @@ See [`LICENSE`](./LICENSE) for the full summary.
 
 ![Logo](docs/media/logo_small.png)
 
-Made by **[Panzer](https://github.com/PanzerDevOrg)**
+Made by **[Panzer](https://github.com/PanzerDevOrg)** - **[Bichal](https://github.com/Bichal)**
 
 [![Modrinth](https://img.shields.io/badge/Modrinth-Download-1bd96a?style=for-the-badge&logo=modrinth)](https://modrinth.com/mod/tesseras)
 [![CurseForge](https://img.shields.io/badge/CurseForge-Download-f16436?style=for-the-badge&logo=curseforge)](https://www.curseforge.com/minecraft/mc-mods/tessera)
