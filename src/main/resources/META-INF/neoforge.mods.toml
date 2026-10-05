@@ -9,6 +9,8 @@ version = "${mod_version}"
 displayName = "${mod_name}"
 authors = "${mod_authors}"
 description = '''${mod_description}'''
+# Client-only: servers never have it, so the server list should not flag it.
+displayTest = "IGNORE_ALL_VERSION"
 
 [[mixins]]
 config = "tessera.mixins.json"
