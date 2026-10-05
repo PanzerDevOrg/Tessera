@@ -123,14 +123,22 @@ public final class DebugOverlay {
         return lines;
     }
 
+    // Shown while F3 is open (renamed from IN_F3 to IN_OVERLAY in 1.21.11).
+    //? >=1.21.11 {
+    /*private static final net.minecraft.client.gui.components.debug.DebugScreenEntryStatus SHOWN_WITH_F3 =
+            net.minecraft.client.gui.components.debug.DebugScreenEntryStatus.IN_OVERLAY;
+    *///?} else if >=1.21.10 {
+    /*private static final net.minecraft.client.gui.components.debug.DebugScreenEntryStatus SHOWN_WITH_F3 =
+            net.minecraft.client.gui.components.debug.DebugScreenEntryStatus.IN_F3;
+    *///?}
+
     //? >=1.21.10 {
     /*public static void registerDebugEntries(net.neoforged.neoforge.client.event.RegisterDebugEntriesEvent event) {
         var summary = com.panzer.mods.tessera.compat.TesseraCompat.id("atlas_compression");
         var breakdown = com.panzer.mods.tessera.compat.TesseraCompat.id("atlas_compression_breakdown");
         event.register(summary, (displayer, level, clientChunk, serverChunk) -> displayer.addToGroup(summary, summaryLines()));
         event.register(breakdown, (displayer, level, clientChunk, serverChunk) -> displayer.addToGroup(breakdown, breakdownLines()));
-        event.includeInProfile(summary, net.minecraft.client.gui.components.debug.DebugScreenProfile.DEFAULT,
-                net.minecraft.client.gui.components.debug.DebugScreenEntryStatus.IN_F3);
+        event.includeInProfile(summary, net.minecraft.client.gui.components.debug.DebugScreenProfile.DEFAULT, SHOWN_WITH_F3);
     }
     *///?} else {
     @net.neoforged.fml.common.EventBusSubscriber(modid = com.panzer.mods.tessera.Tessera.MOD_ID,
