@@ -72,11 +72,9 @@ gradle_tasks = "build buildAndCollect selftest"
 display = true
 
 # Versions: panzer-build-logic's "panzer" profile (1.21.1, 1.21.10, 1.21.11,
-# 26.1). Excluded ones are still being ported: CI does not build them, but
-# `-Pstonecutter.versions=<v>` (or `panzer versions use <v>`) still can.
+# 26.1), each checked in CI by the client self-test.
 [stonecutter]
 profile = "panzer"
-exclude_versions = ["1.21.10", "1.21.11", "26.1"]
 vcs_version = "1.21.1"
 
 [compression]

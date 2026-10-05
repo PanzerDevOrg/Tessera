@@ -1,7 +1,7 @@
 ![Tessera](./docs/media/banner.png)
 
 <!-- publish:off -->
-[![NeoForge](https://img.shields.io/badge/NeoForge-1.21.1-orange?style=for-the-badge)](https://neoforged.net/)
+[![NeoForge](https://img.shields.io/badge/NeoForge-1.21.1%20%7C%201.21.10%20%7C%201.21.11%20%7C%2026.1-orange?style=for-the-badge)](https://neoforged.net/)
 [![Modrinth](https://img.shields.io/badge/Modrinth-Download-1bd96a?style=for-the-badge&logo=modrinth)](https://modrinth.com/mod/tesseras)
 [![CurseForge](https://img.shields.io/badge/CurseForge-Download-f16436?style=for-the-badge&logo=curseforge)](https://www.curseforge.com/minecraft/mc-mods/tessera)
 [![License](https://img.shields.io/badge/Code-AGPLv3-blueviolet?style=for-the-badge)](#license)
@@ -41,15 +41,15 @@ Up to **75% less** texture-atlas VRAM. Savings depend on resource packs and mods
 
 | | |
 |---|---|
-| **Minecraft** | 1.21.1 |
-| **Loader** | NeoForge 21.1.x |
-| **Java** | 21+ |
+| **Minecraft** | 1.21.1 · 1.21.10 · 1.21.11 · 26.1 (one file per version) |
+| **Loader** | NeoForge 21.1 · 21.10 · 21.11 · 26.1 |
+| **Java** | 21 (Minecraft 1.21.x) · 25 (26.x) |
 | **Requires** | [Celeris](https://github.com/PanzerDevOrg/Celeris) 0.1.0+ |
 | **GPU** | Any GPU with BC7 support (OpenGL 4.2+) |
 | **Side** | Client only (servers don't need it) |
 | **macOS** | Not supported (no BC7 on macOS OpenGL) |
 
-1. Install NeoForge for Minecraft 1.21.1.
+1. Install NeoForge for your Minecraft version (1.21.1, 1.21.10, 1.21.11 or 26.1) and pick the Tessera file for it.
 2. Put **Tessera** and **Celeris** in your `mods/` folder.
 3. Launch the game. There is nothing else to set up.
 
