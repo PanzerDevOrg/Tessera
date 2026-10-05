@@ -37,6 +37,24 @@ banner = ""
 version = "0.1.0"
 version_range = "[0.1.0,)"
 
+# Releases and descriptions (panzer-build-logic/publishing). README.md is the
+# description on GitHub, Modrinth and CurseForge. Per-system jars (only that
+# OS's natives; "java" = none) are attached to GitHub releases only.
+[publish]
+modrinth_id = "olpctCIW"
+curseforge_id = "1643537"
+curseforge_slug = "tessera"
+platforms = ["windows", "linux", "java"]
+client_side = "required"
+server_side = "unsupported"
+
+# github: README links to that repository become Celeris's page on each site.
+[publish.dependencies.celeris]
+type = "required"
+modrinth = "sQphaM3I"
+curseforge = "celeris"
+github = "PanzerDevOrg/Celeris"
+
 [stonecutter]
 versions = ["1.21.1"]
 vcs_version = "1.21.1"
@@ -53,3 +71,4 @@ minecraft_version_range = "[1.21.1,1.21.2)"
 neo_version = "21.1.209"
 neo_version_range = "[21.1,21.2)"
 parchment_mappings_version = "2024.11.17"
+game_versions = ["1.21.1"]

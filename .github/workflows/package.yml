@@ -1,7 +1,16 @@
 name: Build and Package
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Release dry run: build, check and preview only (on a tag ref, untick to publish)"
+        type: boolean
+        default: true
+      targets:
+        description: "Release targets"
+        type: string
+        default: github,modrinth,curseforge
   push:
     branches: [master]
     tags: ["v*"]
@@ -126,72 +135,45 @@ jobs:
           chmod +x ./gradlew
           ./gradlew buildAndCollect -Ptessera.native.strict=true --no-watch-fs --stacktrace
 
-      - name: Verify JAR contains all natives
+      # buildAndCollect writes the universal jar, the per-system jars
+      # ([publish] platforms) and the sources jar.
+      - name: Verify jars and their natives
         run: |
           set -euo pipefail
-          JAR_PATH=$(find build/libs -mindepth 2 -maxdepth 2 -name "*.jar" \
-            ! -name "*-sources.jar" ! -name "*-dev.jar" | sort | head -n1)
-          [ -n "$JAR_PATH" ] || { echo "::error::No mod JAR under build/libs/<version>/"; find build/libs -type f; exit 1; }
-          echo "Inspecting $JAR_PATH"
-          for plat in linux-x86_64 linux-aarch64 windows-x86_64; do
-            unzip -l "$JAR_PATH" | grep -q "natives/$plat/" || { echo "::error::Missing natives for $plat in $JAR_PATH"; exit 1; }
+          natives() { unzip -Z1 "$1" | sed -n 's#^natives/\([^/]*\)/.*#\1#p' | sort -u | tr '\n' ' '; }
+          for JAR in $(find build/libs -mindepth 2 -maxdepth 2 -name "*.jar" | grep -Ev -- '-(sources|dev|windows|linux|macos|java)\.jar$'); do
+            BASE=${JAR%.jar}
+            for plat in linux-x86_64 linux-aarch64 windows-x86_64; do
+              unzip -Z1 "$JAR" | grep -q "^natives/$plat/" || { echo "::error::$JAR lacks natives for $plat"; exit 1; }
+            done
+            for os in windows linux; do
+              OTHER=$(natives "$BASE-$os.jar" | tr ' ' '\n' | grep -v "^$os-" | grep -v '^$' || true)
+              [ -z "$OTHER" ] || { echo "::error::$BASE-$os.jar contains foreign natives: $OTHER"; exit 1; }
+              [ -n "$(natives "$BASE-$os.jar")" ] || { echo "::error::$BASE-$os.jar has no natives"; exit 1; }
+            done
+            [ -z "$(natives "$BASE-java.jar")" ] || { echo "::error::$BASE-java.jar contains natives"; exit 1; }
+            [ -f "$BASE-sources.jar" ] || { echo "::error::missing $BASE-sources.jar"; exit 1; }
+            echo "ok: $(basename "$JAR") (+ windows/linux/java/sources)"
           done
 
       - uses: actions/upload-artifact@v5
         with:
-          name: tessera-jar
-          path: Tessera/build/libs/**/*.jar
+          name: tessera-jars
+          path: Tessera/build/libs/
           if-no-files-found: error
 
   release:
-    # Uploads the jar to Modrinth and CurseForge on v* tags.
-    # Configure once per repository (Settings > Secrets and variables > Actions):
-    #   variables: MODRINTH_ID, CURSEFORGE_ID   (project IDs; a missing one skips that site)
-    #   secrets:   MODRINTH_TOKEN, CURSEFORGE_TOKEN
-    # Game versions, loader and the Celeris dependency are read from the jar's
-    # neoforge.mods.toml (Celeris must be published on both sites first).
-    # Skipped entirely until at least one site's project ID is configured.
-    if: startsWith(github.ref, 'refs/tags/v') && (vars.MODRINTH_ID != '' || vars.CURSEFORGE_ID != '')
+    # GitHub release (universal + per-system + sources jars), Modrinth and
+    # CurseForge, through panzer-build-logic's shared publisher. Every push is
+    # a dry run that uploads a "release-preview" artifact (pages and files as
+    # they would be published); only a v* tag publishes for real.
+    # Secrets: MODRINTH_TOKEN, CURSEFORGE_TOKEN. Project ids: [publish] in the TOML.
     needs: package
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      # Refuse to release if the tag disagrees with [mod] version.
-      - name: Check tag matches mod version
-        run: |
-          MOD_VERSION=$(sed -n '/^\[mod\]/,/^\[/{s/^version *= *"\(.*\)"/\1/p}' mod.stonecutter.properties.toml)
-          [ "v$MOD_VERSION" = "$GITHUB_REF_NAME" ] || { echo "::error::Tag $GITHUB_REF_NAME != mod version $MOD_VERSION"; exit 1; }
-
-      - uses: actions/download-artifact@v5
-        with:
-          name: tessera-jar
-          path: jars
-
-      - name: Locate jar
-        id: jar
-        run: |
-          JAR=$(find jars -name "tessera-*.jar" ! -name "*-sources.jar" ! -name "*-dev.jar" | sort | head -n1)
-          [ -n "$JAR" ] || { echo "::error::No Tessera jar"; find jars -type f; exit 1; }
-          MC=$(basename "$JAR" .jar); MC=${MC##*+}
-          echo "path=$JAR" >> "$GITHUB_OUTPUT"
-          echo "version=${GITHUB_REF_NAME#v}+$MC" >> "$GITHUB_OUTPUT"
-          echo "mod_version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      # docs/changelogs/<version>.md is the published changelog.
-      - name: Check changelog exists
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          [ -s "docs/changelogs/$VERSION.md" ] || { echo "::error::Missing docs/changelogs/$VERSION.md"; exit 1; }
-
-      - uses: Kir-Antipov/mc-publish@v3.3
-        with:
-          modrinth-id: ${{ vars.MODRINTH_ID }}
-          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
-          curseforge-id: ${{ vars.CURSEFORGE_ID }}
-          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
-          files: ${{ steps.jar.outputs.path }}
-          name: Tessera ${{ steps.jar.outputs.version }}
-          version: ${{ steps.jar.outputs.version }}
-          loaders: neoforge
-          changelog-file: docs/changelogs/${{ steps.jar.outputs.mod_version }}.md
+    uses: PanzerDevOrg/PanzerBuildLogic/.github/workflows/mod-release.yml@master
+    with:
+      jars-artifact: tessera-jars
+      dry-run: ${{ !(startsWith(github.ref, 'refs/tags/v') && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)) }}
+      targets: ${{ inputs.targets || 'github,modrinth,curseforge' }}
+    secrets: inherit
+    permissions:
+      contents: write

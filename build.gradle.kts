@@ -233,6 +233,7 @@ tasks {
         dependsOn("jar")
         dependsOn(publishToMavenLocal)
         from(project.tasks.named("jar"))
+        from(project.tasks.named("sourcesJar"))
         inputs.property("version", modProps.modVersion)
         into(rootProject.layout.buildDirectory.file("libs/${modProps.modVersion}"))
     }

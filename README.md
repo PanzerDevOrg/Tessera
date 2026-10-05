@@ -1,135 +1,119 @@
-<div align="center">
+![Tessera](./docs/media/banner.png)
 
-# ![Tessera](docs/media/banner.png)
-
-[![NeoForge](https://img.shields.io/badge/NeoForge-1.21.1-orange?style=for-the-badge&logo=curseforge)](https://neoforged.net/)
+<!-- publish:off -->
+[![NeoForge](https://img.shields.io/badge/NeoForge-1.21.1-orange?style=for-the-badge)](https://neoforged.net/)
 [![Modrinth](https://img.shields.io/badge/Modrinth-Download-1bd96a?style=for-the-badge&logo=modrinth)](https://modrinth.com/mod/tesseras)
 [![CurseForge](https://img.shields.io/badge/CurseForge-Download-f16436?style=for-the-badge&logo=curseforge)](https://www.curseforge.com/minecraft/mc-mods/tessera)
 [![License](https://img.shields.io/badge/Code-AGPLv3-blueviolet?style=for-the-badge)](#license)
+<!-- publish:on -->
 
-**A GPU-first VRAM optimization engine for NeoForge 1.21.1**
+**A GPU-first VRAM optimization engine for NeoForge.** Tessera compresses Minecraft's texture atlases into the
+GPU-native **BC7** format in place, cutting atlas VRAM by up to **75%** with no visible difference. Animations keep
+playing, and it needs no setup.
 
-**Compresses texture atlases to BC7 in place, animations included, with a native encoder and a pure-Java fallback.**
-</div>
+> ⚠️ **Requires [Celeris](https://github.com/PanzerDevOrg/Celeris)** (a performance library). Install both.
 
 ---
 
-## Overview
+## ✨ Features
 
-**Tessera** compresses Minecraft's texture atlases into the GPU-native **BC7** block format right after vanilla uploads
-them, cutting atlas VRAM by up to **75%** with no perceptible visual change. It is aimed at low-end and integrated GPUs
-running texture-heavy modpacks.
+| Feature | What it does |
+|---|---|
+| 🧩 **In-place BC7 compression** | Every atlas, including the block atlas, re-encoded right after vanilla uploads it, full mipmaps included |
+| 🌊 **Animations keep working** | Water, lava, fire and every animated texture keep animating on the compressed atlas |
+| 🎨 **Same look** | Near-lossless BC7, with cleanup that avoids white fringes on transparent textures |
+| ⚡ **No stutter** | Compression runs in the background; resource reloads don't freeze the game |
+| 💾 **Disk cache** | Unchanged atlases aren't re-compressed on the next launch |
+| 🛡️ **Never crashes the game** | Native encoder for Windows and Linux, pure-Java fallback everywhere else |
+| 📊 **F3 overlay** | Live VRAM savings in the debug screen |
 
-The atlas keeps its texture, UVs and rendering path: only its storage format changes, so chunk meshing, lighting,
-shaders and other mods are untouched.
+Rendering, UVs, lighting and shaders are untouched, so Tessera works alongside other rendering mods.
 
-> In **early development**. Feedback and bug reports are very welcome.
+## 📈 Results
 
-## Features
-
-### 🧩 In-place BC7 compression
-
-- Every atlas, including the block atlas, is re-encoded to BC7 after vanilla's upload, with its full mip chain.
-- Encoding runs on a background thread; only the GPU upload happens on the render thread, so reloads don't freeze the
-  game.
-- Fully transparent texels are colour-bled before encoding, so cutout and GUI textures get no white/grey fringes.
-- A content-addressed disk cache (`tessera-cache/`, size-capped, least-recently-used eviction) skips re-encoding
-  unchanged atlases on the next launch.
-
-### 🌊 Animated textures keep animating
-
-- Water, lava, fire and every other animated sprite stay animated on the compressed atlas: each frame is written as BC
-  blocks with `glCompressedTexSubImage2D`.
-- Keyframes are encoded once and cached; interpolated frames are encoded on the fly.
-- At the smallest mip levels, where a sprite is smaller than a 4×4 block, only the affected blocks are patched and
-  re-encoded.
-
-### ⚡ Native encoder with a safe fallback
-
-- A bundled native encoder ([bc7enc_rdo](https://github.com/richgel999/bc7enc_rdo)) is loaded over JNI: no launch flags,
-  works on Java 21+.
-- Bundled for **Windows x86_64**, **Linux x86_64** and **Linux AArch64** (glibc 2.17+).
-- On any other platform, or if the native library fails to load, Tessera switches to its pure-Java encoder. It never
-  crashes the game because of the native layer.
-
-### 📊 F3 debug overlay
-
-- Live VRAM savings per atlas in the debug HUD.
-
-### 🔌 Compression event API
-
-- `AtlasCompressEvent.Pre` (cancellable; lets you choose BC7 or BC1 per atlas) and `AtlasCompressEvent.Post` (bytes
-  saved and resident), fired on `NeoForge.EVENT_BUS`.
-
-## Savings
-
-<div align="center">
-
-| Version 0.1 (Old) | Version 0.2 (New) |
+| Version 0.1 (old) | Version 0.2 (new) |
 |:---:|:---:|
-| <img alt="Old Active Mod Saving 6.13MB" src="./docs/media/old_active_mod.png"> | <img alt="New Active Mod Saving 11.88MB" src="./docs/media/active_mod.png"> |
+| ![Old version saving 6.13 MB](./docs/media/old_active_mod.png) | ![New version saving 11.88 MB](./docs/media/active_mod.png) |
 
-</div>
+Up to **75% less** texture-atlas VRAM. Savings depend on resource packs and mods; they grow with texture-heavy packs.
 
-- Up to **75% less** texture-atlas VRAM.
-- BC7 is near-lossless for typical Minecraft textures.
-- Savings grow with atlas count and resolution.
+## 📋 Requirements
 
-> Results depend on resource packs, installed mods and atlas composition.
-
-## Installation & Requirements
-
-| Requirement    | Version                                                                      |
-|----------------|------------------------------------------------------------------------------|
-| Minecraft      | `1.21.1`                                                                     |
-| Mod loader     | [NeoForge](https://neoforged.net/) `21.1.x`                                  |
-| Java           | `21+`                                                                        |
-| Dependency     | [Celeris](https://github.com/PanzerDevOrg/Celeris) `0.1.0+`                  |
-| GPU            | BC7 support (`GL_ARB_texture_compression_bptc`, any OpenGL 4.2+ GPU)         |
-| Native encoder | Windows x86_64, Linux x86_64 / AArch64; other platforms use the Java encoder |
-| macOS          | Not supported (OpenGL 4.1, no BC7)                                           |
+| | |
+|---|---|
+| **Minecraft** | 1.21.1 |
+| **Loader** | NeoForge 21.1.x |
+| **Java** | 21+ |
+| **Requires** | [Celeris](https://github.com/PanzerDevOrg/Celeris) 0.1.0+ |
+| **GPU** | Any GPU with BC7 support (OpenGL 4.2+) |
+| **Side** | Client only (servers don't need it) |
+| **macOS** | Not supported (no BC7 on macOS OpenGL) |
 
 1. Install NeoForge for Minecraft 1.21.1.
 2. Put **Tessera** and **Celeris** in your `mods/` folder.
 3. Launch the game. There is nothing else to set up.
 
-> Tessera is **client-side only**; servers don't need it.
+The standard file works on every system. GitHub releases also offer Windows-only, Linux-only and pure-Java files for
+anyone who wants exactly what their machine runs.
 
-## ⚡ Maximum performance (optional JVM flags)
+## ⚡ Maximum performance (optional)
 
-Tessera and Celeris work out of the box. A few JVM flags unlock Celeris's fastest code paths (SIMD math used by
-Tessera's atlas analysis, plus off-heap memory and native zstd on Java 21):
+Tessera works without any setup. These JVM flags unlock Celeris's fastest code paths:
 
-| Minecraft (Java)       | Add to your JVM arguments                                                                |
-|------------------------|------------------------------------------------------------------------------------------|
-| 1.21.x (Java 21)       | `--enable-preview --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED` |
-| 26.x and up (Java 25+) | `--add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED`                  |
+| Minecraft (Java) | Add to your JVM arguments |
+|---|---|
+| 1.21.x (Java 21) | `--enable-preview --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED` |
+| 26.x and up (Java 25+) | `--add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED` |
 
-Where to put them: **Modrinth App** → instance → *Settings → Java and memory → Java arguments*; **CurseForge App** →
-*Settings → Minecraft → Additional arguments*; **Prism Launcher** → instance → *Settings → Java → JVM arguments*.
+Where to put them:
 
-Without flags nothing breaks: each feature falls back to a pure-Java path. Use `--enable-preview` only with the
-Java 21 that Minecraft 1.21.x ships with.
+- **Modrinth App**: instance → *Settings → Java and memory → Java arguments*
+- **CurseForge App**: *Settings → Minecraft → Additional arguments*
+- **Prism Launcher**: instance → *Settings → Java → JVM arguments*
 
-## Configuration
+Without the flags nothing breaks; each feature uses its pure-Java fallback. Use `--enable-preview` only with the Java 21
+that Minecraft 1.21.x ships with.
 
-`config/tessera-client.toml` (also editable from the in-game mod settings screen):
+## ⚙️ Configuration
 
-| Option                     | Default         | Effect                                                 |
-|----------------------------|-----------------|--------------------------------------------------------|
-| `compressionQuality`       | `4`             | Native BC7 quality preset, `0` (fastest) to `7` (best) |
-| `disableNativeCompression` | `false`         | Turns all compression off; atlases stay vanilla RGBA8  |
-| `vramBudgetTargetMb`       | `2048`          | Budget used when the GPU's VRAM can't be queried       |
-| `cacheDirectory`           | `tessera-cache` | Disk cache folder, relative to the game directory      |
+In the in-game mod settings, or `config/tessera-client.toml`:
 
-The disk cache size limit defaults to 512 MB; change it with `-Dtessera.cache.maxMB=<MB>`.
+| Option | Default | Effect |
+|---|---|---|
+| `compressionQuality` | `4` | BC7 quality preset, `0` (fastest) to `7` (best) |
+| `disableNativeCompression` | `false` | Turns compression off; atlases stay vanilla |
+| `vramBudgetTargetMb` | `2048` | Budget used when the GPU's VRAM can't be detected |
+| `cacheDirectory` | `tessera-cache` | Disk cache folder, relative to the game directory |
 
-## Developer Guide
+The disk cache is capped at 512 MB; change it with `-Dtessera.cache.maxMB=<MB>`.
 
-Bug reports and PRs are welcome. Please open an issue first for larger changes.
+## 🔌 For developers
 
-- **Bugs:** [GitHub Issues](https://github.com/PanzerDevOrg/Tessera/issues). Include Minecraft/NeoForge/Tessera
-  versions, GPU, OS and your log.
+`AtlasCompressEvent.Pre` (cancellable; choose BC7 or BC1 per atlas) and `AtlasCompressEvent.Post` (bytes saved and
+resident) are fired on `NeoForge.EVENT_BUS`.
+
+Source code, issues and docs: **[github.com/PanzerDevOrg/Tessera](https://github.com/PanzerDevOrg/Tessera)**
+
+<!-- publish:off -->
+
+## How it works
+
+- Every atlas is re-encoded to BC7 after vanilla's upload, with its full mip chain. Encoding runs on a background
+  thread; only the GPU upload happens on the render thread.
+- Fully transparent texels are colour-bled before encoding, so cutout and GUI textures get no fringes.
+- A content-addressed disk cache (`tessera-cache/`, size-capped, least-recently-used eviction) skips re-encoding
+  unchanged atlases.
+- Animated sprites are written as BC blocks with `glCompressedTexSubImage2D`: keyframes are encoded once and cached,
+  interpolated frames on the fly; at mip levels smaller than a 4×4 block only the affected blocks are patched.
+- The native encoder ([bc7enc_rdo](https://github.com/richgel999/bc7enc_rdo)) is loaded over JNI (no launch flags),
+  bundled for Windows x86_64, Linux x86_64 and Linux AArch64 (glibc 2.17+). Anywhere else, or if it fails to load,
+  the pure-Java encoder takes over.
+
+## Developer guide
+
+Bug reports and PRs are welcome; please open an issue first for larger changes.
+[GitHub Issues](https://github.com/PanzerDevOrg/Tessera/issues): include Minecraft/NeoForge/Tessera versions, GPU, OS
+and your log.
 
 ### Setup
 
@@ -141,9 +125,7 @@ git clone https://github.com/PanzerDevOrg/Tessera.git
 ```
 
 Celeris is resolved from your local Maven repository (if you `publishToMavenLocal` it yourself) or from
-`https://panzerdevorg.github.io/Celeris/maven`.
-
-Requirements: **JDK 21**. Gradle comes with the wrapper.
+`https://panzerdevorg.github.io/Celeris/maven`. Requirements: **JDK 21**.
 
 ### Build and run
 
@@ -151,7 +133,7 @@ Requirements: **JDK 21**. Gradle comes with the wrapper.
 ./gradlew :1.21.1:build        # compile + test
 ./gradlew :1.21.1:runClient    # dev client
 ./gradlew :1.21.1:runData      # regenerate lang files (src/generated/resources)
-./gradlew buildAndCollect      # release jar in build/libs/<version>/
+./gradlew buildAndCollect      # release jars (universal, per-system, sources) in build/libs/<version>/
 ```
 
 ### Native encoder
@@ -170,20 +152,18 @@ mkdir -p natives/windows/x86_64 && cp build-native/windows/Release/tessera_bridg
 JAVA_HOME=<path to a JDK> ./native/build-linux.sh
 ```
 
-The prebuilt binaries are committed under `natives/<os>/<arch>/` so they can be inspected. CI rebuilds all three from
-`native/` on every push (`.github/workflows/package.yml`) and bundles those fresh builds into the released jar; you
-only need to rebuild them locally when changing `native/`.
+The prebuilt binaries are committed under `natives/<os>/<arch>/`. CI rebuilds all three from `native/` on every push
+and bundles those fresh builds into the released jars.
 
-### Releases, changelogs and the Modrinth page
+### Releases and descriptions
 
-Everything published outside GitHub lives in [`docs/`](./docs): one changelog per version in
-`docs/changelogs/<version>.md`, and the Modrinth page in `docs/modrinth/description.md` (synced on every push to
-`master`). See [`docs/README.md`](./docs/README.md) for the release steps.
+This README is also the description on Modrinth and CurseForge (everything outside `publish:off` blocks). Changelogs
+live in `docs/changelogs/<version>.md`; see [`docs/README.md`](./docs/README.md) for the release steps and previews.
 
 ### Project layout
 
 ```
-docs/                   # changelogs/, modrinth/, media/ (see docs/README.md)
+docs/                   # changelogs/, media/ (see docs/README.md)
 native/
   CMakeLists.txt        # JNI library build
   build-linux.sh        # Linux x86_64 + aarch64 build in Docker
@@ -201,11 +181,11 @@ src/main/java/com/panzer/mods/tessera/
 
 ## License
 
-| Content                             | License                                                                                                  |
-|-------------------------------------|----------------------------------------------------------------------------------------------------------|
-| Source code (Java, C++)             | [AGPL-3.0-only](https://www.gnu.org/licenses/agpl-3.0.html) — see [`LICENSE-AGPL`](./LICENSE-AGPL)       |
-| Artwork, logos, and branding assets | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) — see [`LICENSE-CC`](./LICENSE-CC) |
-| Vendored bc7enc_rdo                 | MIT / public domain — see [`native/vendor/bc7enc_rdo/LICENSE`](./native/vendor/bc7enc_rdo/LICENSE)       |
+| Content | License |
+|---|---|
+| Source code (Java, C++) | [AGPL-3.0-only](https://www.gnu.org/licenses/agpl-3.0.html), see [`LICENSE-AGPL`](./LICENSE-AGPL) |
+| Artwork, logos and branding | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/), see [`LICENSE-CC`](./LICENSE-CC) |
+| Vendored bc7enc_rdo | MIT / public domain, see [`native/vendor/bc7enc_rdo/LICENSE`](./native/vendor/bc7enc_rdo/LICENSE) |
 
 **Source code:** you may study, modify and redistribute it under the AGPL; if you run a modified version as a network
 service, its source must be available to that service's users.
@@ -214,16 +194,8 @@ service, its source must be available to that service's users.
 
 See [`LICENSE`](./LICENSE) for the full summary.
 
+<!-- publish:on -->
+
 ---
 
-<div align="center">
-
-![Logo](docs/media/logo_small.png)
-
-Made by **[Panzer](https://github.com/PanzerDevOrg)** - **[Bichal](https://github.com/Bichal)**
-
-[![Modrinth](https://img.shields.io/badge/Modrinth-Download-1bd96a?style=for-the-badge&logo=modrinth)](https://modrinth.com/mod/tesseras)
-[![CurseForge](https://img.shields.io/badge/CurseForge-Download-f16436?style=for-the-badge&logo=curseforge)](https://www.curseforge.com/minecraft/mc-mods/tessera)
-[![Issues](https://img.shields.io/badge/issues-open_issue-f16436?style=for-the-badge&logo=github)](https://github.com/PanzerDevOrg/Tessera/issues)
-
-</div>
+Code: **AGPL-3.0** · Art: **CC BY-NC-SA 4.0** · Made by **Panzer**

@@ -1,0 +1,26 @@
+name: Sync descriptions
+
+# README.md is the description on Modrinth (pushed by the API) and CurseForge
+# (curseforge.html in the "descriptions" artifact, pasted by hand: CurseForge
+# has no description API).
+#   push to master (README/media/TOML changed): render only, as a private check
+#   v* tag: update Modrinth, so the page changes together with the release
+#   manual run: dry run by default; untick to update Modrinth now
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Render only, do not update Modrinth"
+        type: boolean
+        default: true
+  push:
+    branches: [master]
+    tags: ["v*"]
+    paths: ["README.md", "docs/media/**", "mod.stonecutter.properties.toml"]
+
+jobs:
+  descriptions:
+    uses: PanzerDevOrg/PanzerBuildLogic/.github/workflows/mod-description.yml@master
+    with:
+      dry-run: ${{ !(startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)) }}
+    secrets: inherit
