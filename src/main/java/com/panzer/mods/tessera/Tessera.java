@@ -8,6 +8,7 @@ import com.panzer.mods.tessera.config.Config;
 import com.panzer.mods.tessera.config.RulesManager;
 import com.panzer.mods.tessera.datagen.DataGenerators;
 import com.panzer.mods.tessera.gui.KnownEngineBugLogFilter;
+import com.panzer.mods.tessera.selftest.TesseraSelfTest;
 import com.panzer.mods.tessera.vram.VramBudgetEngine;
 import net.minecraft.client.Minecraft;
 import net.neoforged.api.distmarker.Dist;
@@ -78,6 +79,10 @@ public final class Tessera {
         *///?}
 
         DataGenerators.register(modEventBus);
+
+        if (TesseraSelfTest.ENABLED) {
+            TesseraSelfTest.register();
+        }
     }
 
     private void onClientSetup(FMLClientSetupEvent event) {

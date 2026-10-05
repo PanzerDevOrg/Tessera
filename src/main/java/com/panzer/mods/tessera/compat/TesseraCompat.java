@@ -100,6 +100,15 @@ public final class TesseraCompat {
         return contents.getUniqueFrames().limit(2).count() > 1;
     }
 
+    /** Indices of a sprite's distinct animation frames (an IntStream up to 1.21.10, an IntList after). */
+    public static int[] uniqueFrames(SpriteContents contents) {
+        Object frames = contents.getUniqueFrames();
+        if (frames instanceof java.util.stream.IntStream stream) {
+            return stream.toArray();
+        }
+        return ((it.unimi.dsi.fastutil.ints.IntCollection) frames).toIntArray();
+    }
+
     /**
      * Width of the ring around a sprite's pixels in the atlas (1.21.11+):
      * the sprite occupies {@code (x, y, width + 2p, height + 2p)} and the ring

@@ -65,6 +65,12 @@ modrinth = "sQphaM3I"
 curseforge = "celeris"
 github = "PanzerDevOrg/Celeris"
 
+# CI also runs `selftest`: a headless client (Xvfb + Mesa) reads every
+# compressed atlas back and checks it against its sprites (TesseraSelfTest).
+[ci]
+gradle_tasks = "build buildAndCollect selftest"
+display = true
+
 # Versions: panzer-build-logic's "panzer" profile (1.21.1, 1.21.10, 1.21.11,
 # 26.1). Excluded ones are still being ported: CI does not build them, but
 # `-Pstonecutter.versions=<v>` (or `panzer versions use <v>`) still can.
