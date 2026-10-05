@@ -58,7 +58,17 @@ public final class TesseraCompat {
     /** OpenGL name of a texture. */
     public static int glId(AbstractTexture texture) {
         //? >=1.21.10 {
-        /*return ((GlTexture) texture.getTexture()).glId();
+        /*Object gpu = texture.getTexture();
+        // NeoForge's GPU validation layer (on in dev runs) wraps every texture:
+        // ValidationGpuTexture.getRealTexture() is the GL one underneath.
+        for (int depth = 0; !(gpu instanceof GlTexture) && depth < 4; depth++) {
+            try {
+                gpu = gpu.getClass().getMethod("getRealTexture").invoke(gpu);
+            } catch (ReflectiveOperationException e) {
+                throw new IllegalStateException("not an OpenGL texture: " + gpu.getClass().getName(), e);
+            }
+        }
+        return ((GlTexture) gpu).glId();
         *///?} else
         return texture.getId();
     }
