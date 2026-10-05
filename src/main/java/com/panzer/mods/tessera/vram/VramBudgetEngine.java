@@ -33,7 +33,7 @@ public final class VramBudgetEngine {
             return (int) (hardwareVram * 0.75);
         }
 
-        return Config.VRAM_BUDGET_TARGET_MB.get();
+        return Config.get(Config.VRAM_BUDGET_TARGET_MB);
     }
 
     private static int queryHardwareVramMb() {

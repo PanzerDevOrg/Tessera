@@ -157,7 +157,7 @@ public final class DebugOverlay {
             List<String> tesseraLines = new ArrayList<>();
             tesseraLines.add("");
             tesseraLines.addAll(summaryLines());
-            if (isCompressedAtlasActive && bytesSavedByBC7 > 0 && Config.SHOW_EXTENDED_DEBUG_BREAKDOWN.get()) {
+            if (isCompressedAtlasActive && bytesSavedByBC7 > 0 && Config.get(Config.SHOW_EXTENDED_DEBUG_BREAKDOWN)) {
                 tesseraLines.addAll(breakdownLines());
             }
             int insertIndex = getIndex(rightList);

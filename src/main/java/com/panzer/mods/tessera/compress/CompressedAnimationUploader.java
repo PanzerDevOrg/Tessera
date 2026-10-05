@@ -343,7 +343,7 @@ public final class CompressedAnimationUploader {
     private static ByteBuffer encodeBlocks(ByteBuffer rgba, int w, int h, CompressionPipeline.Target target) {
         boolean bc7 = target == CompressionPipeline.Target.BC7;
         ByteBuffer blocks = (w & 3) == 0 && (h & 3) == 0
-                ? CompressionPipeline.compressBlocking("animation", rgba, w, h, bc7, Config.COMPRESSION_QUALITY.get())
+                ? CompressionPipeline.compressBlocking("animation", rgba, w, h, bc7, Config.get(Config.COMPRESSION_QUALITY))
                 : null;
         if (blocks == null) {
             ByteBuffer copy = ByteBuffer.allocateDirect(w * h * 4).order(ByteOrder.LITTLE_ENDIAN);

@@ -168,6 +168,16 @@ public final class TesseraCompat {
     }
     //?}
 
+    /** Whether a class exists in the running game/loader (APIs that come and go between versions). */
+    public static boolean hasClass(String name) {
+        try {
+            Class.forName(name, false, TesseraCompat.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException | LinkageError e) {
+            return false;
+        }
+    }
+
     public static Executor backgroundExecutor() {
         return Util.backgroundExecutor();
     }

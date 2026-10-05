@@ -87,7 +87,15 @@ public final class Config {
 
     public record ReloadSensitiveSnapshot(String cacheDirectory, int compressionQuality) {
         public static ReloadSensitiveSnapshot capture() {
-            return new ReloadSensitiveSnapshot(CACHE_DIRECTORY.get(), COMPRESSION_QUALITY.get());
+            return new ReloadSensitiveSnapshot(get(CACHE_DIRECTORY), get(COMPRESSION_QUALITY));
         }
+    }
+
+    /**
+     * The value, or its default while the client config is not loaded yet: some
+     * versions (1.21.7) stitch atlases before NeoForge loads client configs.
+     */
+    public static <T> T get(ModConfigSpec.ConfigValue<T> value) {
+        return SPEC.isLoaded() ? value.get() : value.getDefault();
     }
 }

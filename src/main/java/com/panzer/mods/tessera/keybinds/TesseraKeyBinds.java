@@ -36,7 +36,7 @@ public final class TesseraKeyBinds {
 
             ((KeyboardHandlerAccessor) mc.keyboardHandler).setHandledDebugKey(true);
 
-            boolean newState = !Config.SHOW_EXTENDED_DEBUG_BREAKDOWN.get();
+            boolean newState = !Config.get(Config.SHOW_EXTENDED_DEBUG_BREAKDOWN);
             Config.SHOW_EXTENDED_DEBUG_BREAKDOWN.set(newState);
             Config.SHOW_EXTENDED_DEBUG_BREAKDOWN.save();
 

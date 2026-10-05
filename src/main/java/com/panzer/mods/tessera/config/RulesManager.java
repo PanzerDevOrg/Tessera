@@ -1,38 +1,16 @@
 package com.panzer.mods.tessera.config;
 
-import net.minecraft.server.packs.resources.PreparableReloadListener;
-import net.minecraft.server.packs.resources.ResourceManager;
-import net.minecraft.util.profiling.ProfilerFiller;
-import org.jetbrains.annotations.NotNull;
-
 import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 
-public final class RulesManager implements PreparableReloadListener {
+/** Overrides that a rules file may set; nothing fills them yet (no reload listener). */
+public final class RulesManager {
 
-    // Atlas locations excluded from compression, populated from the rules file.
+    // Atlas locations excluded from compression.
     public static final Set<String> BLACKLISTED_ATLASES = new HashSet<>();
 
     public static Integer forcedVramBudgetMb;
 
-    public RulesManager() {
+    private RulesManager() {
     }
-
-    //? >=1.21.10 {
-    /*@Override
-    public CompletableFuture<Void> reload(SharedState sharedState, Executor backgroundExecutor,
-                                          PreparationBarrier preparationBarrier, Executor gameExecutor) {
-        return CompletableFuture.runAsync(() -> {
-        }, gameExecutor).thenCompose(preparationBarrier::wait);
-    }
-    *///?} else {
-    @Override
-    @NotNull
-    public CompletableFuture<Void> reload(PreparationBarrier preparationBarrier, @NotNull ResourceManager resourceManager, @NotNull ProfilerFiller profilerFiller, @NotNull ProfilerFiller profilerFiller1, @NotNull Executor executor, @NotNull Executor executor1) {
-        return CompletableFuture.runAsync(() -> {
-        }, executor1).thenCompose(preparationBarrier::wait);
-    }
-    //?}
 }

@@ -5,7 +5,6 @@ import com.panzer.mods.tessera.compress.Bc1TextureFormatSupport;
 import com.panzer.mods.tessera.compress.Bc7GpuSupport;
 import com.panzer.mods.tessera.compress.backend.TesseraRuntime;
 import com.panzer.mods.tessera.config.Config;
-import com.panzer.mods.tessera.config.RulesManager;
 import com.panzer.mods.tessera.datagen.DataGenerators;
 import com.panzer.mods.tessera.gui.KnownEngineBugLogFilter;
 import com.panzer.mods.tessera.selftest.TesseraSelfTest;
@@ -19,11 +18,8 @@ import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 //? >=1.21.10 {
-/*import com.panzer.mods.tessera.compat.TesseraCompat;
-import com.panzer.mods.tessera.gui.DebugOverlay;
-import net.neoforged.neoforge.client.event.AddClientReloadListenersEvent;
-*///?} else
-import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
+/*import com.panzer.mods.tessera.gui.DebugOverlay;
+*///?}
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import org.slf4j.Logger;
@@ -72,10 +68,13 @@ public final class Tessera {
         modEventBus.addListener(this::onConfigLoading);
 
         modEventBus.addListener(this::onClientSetup);
-        modEventBus.addListener(this::onRegisterReloadListeners);
         modEventBus.addListener(this::onConfigReloading);
         //? >=1.21.10 {
-        /*modEventBus.addListener(DebugOverlay::registerDebugEntries);
+        /*// NeoForge's debug-entry event arrived in 21.10; the 1.21.10 build also runs on 1.21.7 - 1.21.9.
+        if (com.panzer.mods.tessera.compat.TesseraCompat.hasClass(
+                "net.neoforged.neoforge.client.event.RegisterDebugEntriesEvent")) {
+            modEventBus.addListener(DebugOverlay::registerDebugEntries);
+        }
         *///?}
 
         DataGenerators.register(modEventBus);
@@ -104,16 +103,6 @@ public final class Tessera {
             }
         });
     }
-
-    //? >=1.21.10 {
-    /*private void onRegisterReloadListeners(AddClientReloadListenersEvent event) {
-        event.addListener(TesseraCompat.id("rules"), new RulesManager());
-    }
-    *///?} else {
-    private void onRegisterReloadListeners(RegisterClientReloadListenersEvent event) {
-        event.registerReloadListener(new RulesManager());
-    }
-    //?}
 
     private void onConfigLoading(ModConfigEvent.Loading event) {
         if (event.getConfig().getSpec() == Config.SPEC) {

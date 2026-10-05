@@ -69,7 +69,7 @@ public final class AtlasCompressionDriver {
         // of the clean vanilla-atlas fallback this method's own docstring promises.
         // No native-availability gate here: TesseraRuntime already falls back to the
         // software encoder, and gating on native would disable that fallback entirely.
-        if (Config.DISABLE_NATIVE_COMPRESSION.get()) {
+        if (Config.get(Config.DISABLE_NATIVE_COMPRESSION)) {
             return null;
         }
 
@@ -125,7 +125,7 @@ public final class AtlasCompressionDriver {
         pixels.rewind();
 
         NativeFamilyDetector.DetectionResult result = NativeFamilyDetector.detect(
-                pixels, spriteInputs, atlasWidth, atlasHeight, Config.DEDUP_SIMILARITY_THRESHOLD.get());
+                pixels, spriteInputs, atlasWidth, atlasHeight, Config.get(Config.DEDUP_SIMILARITY_THRESHOLD));
         if (result == null) {
             return null;
         }
@@ -222,7 +222,7 @@ public final class AtlasCompressionDriver {
         // off the render thread, and the native encoder parallelises each level
         // internally, so a per-call pool plus queue would only add overhead.
         List<CompressedLevel> compressedLevels = new ArrayList<>(mipLevels.size());
-        int quality = Config.COMPRESSION_QUALITY.get();
+        int quality = Config.get(Config.COMPRESSION_QUALITY);
         boolean bc7 = target == CompressionPipeline.Target.BC7;
         String key = atlasLocation.toString();
         AtlasCache cache = cache();
@@ -484,7 +484,7 @@ public final class AtlasCompressionDriver {
 
     private static synchronized AtlasCache cache() {
         if (cacheInstance == null) {
-            cacheInstance = new AtlasCache(FMLPaths.GAMEDIR.get().resolve(Config.CACHE_DIRECTORY.get()));
+            cacheInstance = new AtlasCache(FMLPaths.GAMEDIR.get().resolve(Config.get(Config.CACHE_DIRECTORY)));
             // Once per (re)creation, i.e. per resource reload, on whichever thread
             // calls compress(); a directory listing, negligible next to encoding.
             cacheInstance.prune(AtlasCache.configuredMaxBytes());

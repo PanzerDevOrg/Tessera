@@ -105,7 +105,7 @@ public abstract class TextureAtlasUploadMixin {
 
     @Unique
     private void tessera$compressInPlaceUnchecked(SpriteLoader.Preparations preparations) {
-        if (Config.DISABLE_NATIVE_COMPRESSION.get()) {
+        if (Config.get(Config.DISABLE_NATIVE_COMPRESSION)) {
             return;
         }
 
