@@ -57,7 +57,7 @@ public final class TesseraSelfTest {
     }
 
     private static final Map<String, Compressed> COMPRESSED = new LinkedHashMap<>();
-    private static int ticks, lastCompressedTick = -1;
+    private static int ticks, lastCompressedTick = -1, animatedChanged;
     private static boolean done;
 
     private TesseraSelfTest() {
@@ -118,8 +118,17 @@ public final class TesseraSelfTest {
         if (!ok) {
             out.add("the block atlas was not compressed");
         }
+        boolean anyAnimated = false;
         for (var entry : COMPRESSED.entrySet()) {
             ok &= checkAtlas(entry.getKey(), entry.getValue(), out);
+            anyAnimated |= entry.getValue().atlas().getTextures().values().stream()
+                    .anyMatch(sprite -> TesseraCompat.isAnimated(sprite.contents()));
+        }
+        // Some animations are slow (a GUI icon may hold a frame for seconds), but
+        // across every compressed atlas some must have moved on.
+        if (anyAnimated && animatedChanged == 0) {
+            out.add("no animated sprite changed in any compressed atlas");
+            ok = false;
         }
         return ok;
     }
@@ -191,8 +200,7 @@ public final class TesseraSelfTest {
         ByteBuffer after = readLevel0(width, height);
         try {
             int changed = 0, matching = 0;
-            double worst = Double.POSITIVE_INFINITY;
-            String worstName = "";
+            List<String> mismatched = new ArrayList<>();
             for (TextureAtlasSprite sprite : animated) {
                 if (differs(before, after, width, sprite)) {
                     changed++;
@@ -205,16 +213,17 @@ public final class TesseraSelfTest {
                 }
                 if (best >= MIN_FRAME_PSNR) {
                     matching++;
-                }
-                if (best < worst) {
-                    worst = best;
-                    worstName = sprite.contents().name().toString();
+                } else {
+                    mismatched.add(String.format("%s %.1f dB (%dx%d at %d,%d, %d frames)", sprite.contents().name(), best,
+                            sprite.contents().width(), sprite.contents().height(), sprite.getX(), sprite.getY(),
+                            TesseraCompat.uniqueFrames(sprite.contents()).length));
                 }
             }
-            boolean ok = changed > 0 && matching == animated.size();
-            out.add(String.format("%s: %d animated sprites, %d changed after %d ticks, %d show one of their frames"
-                            + " (worst %.1f dB: %s)%s", name, animated.size(), changed, ANIMATION_TICKS, matching,
-                    worst, worstName, ok ? "" : " FAIL"));
+            animatedChanged += changed;
+            boolean ok = matching == animated.size();
+            out.add(String.format("%s: %d animated sprites, %d changed after %d ticks, %d show one of their frames%s",
+                    name, animated.size(), changed, ANIMATION_TICKS, matching, ok ? "" : " FAIL:"));
+            mismatched.forEach(m -> out.add("    " + m));
             return ok;
         } finally {
             MemoryUtil.memFree(after);
