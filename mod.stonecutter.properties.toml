@@ -65,20 +65,37 @@ modrinth = "sQphaM3I"
 curseforge = "celeris"
 github = "PanzerDevOrg/Celeris"
 
+# Versions: panzer-build-logic's "panzer" profile (1.21.1, 1.21.10, 1.21.11,
+# 26.1). Excluded ones are still being ported: CI does not build them, but
+# `-Pstonecutter.versions=<v>` (or `panzer versions use <v>`) still can.
 [stonecutter]
-versions = ["1.21.1"]
+profile = "panzer"
+exclude_versions = ["1.21.10", "1.21.11", "26.1"]
 vcs_version = "1.21.1"
 
 [compression]
 # BC7 quality preset 0-7 used by dev runs (tessera.compression.defaultQualityPreset).
 default_quality_preset = 3
 
-# Pinned per mod: the exact NeoForge build Tessera is tested against, which
-# overrides the shared ["1.21.1"] block in the common TOML.
+# What each build claims to support (merged with the common TOML's block for
+# that version). The 1.21.10, 1.21.11 and 26.1 entries are provisional until
+# those builds are ported and verified.
 ["1.21.1"]
-minecraft_version = "1.21.1"
 minecraft_version_range = "[1.21.1,1.21.2)"
-neo_version = "21.1.209"
 neo_version_range = "[21.1,21.2)"
-parchment_mappings_version = "2024.11.17"
 game_versions = ["1.21.1"]
+
+["1.21.10"]
+minecraft_version_range = "[1.21.10,1.21.11)"
+neo_version_range = "[21.10,21.11)"
+game_versions = ["1.21.10"]
+
+["1.21.11"]
+minecraft_version_range = "[1.21.11,1.21.12)"
+neo_version_range = "[21.11,21.12)"
+game_versions = ["1.21.11"]
+
+["26.1"]
+minecraft_version_range = "[26.1,26.2)"
+neo_version_range = "[26.1,26.2)"
+game_versions = ["26.1"]
