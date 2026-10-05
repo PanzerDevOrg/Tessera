@@ -47,6 +47,11 @@ public final class Bc1TextureFormatSupport {
         isSupported();
     }
 
+    /** Whether a GL context has answered yet (setup work may run off the render thread, e.g. 26.3). */
+    public static boolean isKnown() {
+        return supported != null;
+    }
+
     public static boolean isSupported() {
         Boolean cached = supported;
         if (cached != null) {

@@ -94,11 +94,11 @@ public final class Tessera {
             Bc1TextureFormatSupport.warmUp();
             VramBudgetEngine.warmUp();
 
-            if (!bc7Supported) {
+            if (Bc7GpuSupport.isKnown() && !bc7Supported) {
                 LOGGER.warn("This GPU/driver does not expose GL_COMPRESSED_RGBA_BPTC_UNORM (BC7); "
                         + "atlases stay uncompressed RGBA8.");
             }
-            if (!Bc1TextureFormatSupport.isSupported()) {
+            if (Bc1TextureFormatSupport.isKnown() && !Bc1TextureFormatSupport.isSupported()) {
                 LOGGER.warn("This GPU/driver does not expose GL_EXT_texture_compression_s3tc (BC1).");
             }
         });
