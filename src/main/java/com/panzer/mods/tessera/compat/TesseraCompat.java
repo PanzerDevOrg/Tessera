@@ -199,7 +199,23 @@ public final class TesseraCompat {
         }
     }
 
+    private static volatile Executor background;
+
+    /**
+     * {@code Util.backgroundExecutor()}: an ExecutorService up to 1.21.1, a
+     * TracingExecutor from 1.21.2 (the 1.21.1 build also runs there), so it is
+     * looked up by name; both are Executors.
+     */
     public static Executor backgroundExecutor() {
-        return Util.backgroundExecutor();
+        Executor executor = background;
+        if (executor == null) {
+            try {
+                executor = (Executor) Util.class.getMethod("backgroundExecutor").invoke(null);
+            } catch (ReflectiveOperationException e) {
+                throw new IllegalStateException("Tessera: no Util.backgroundExecutor()", e);
+            }
+            background = executor;
+        }
+        return executor;
     }
 }
