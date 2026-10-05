@@ -33,6 +33,12 @@ on:
 permissions:
   contents: write
 
+# A newer push to the same branch or PR replaces a run still in progress;
+# tag runs (releases) are never cancelled.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 jobs:
   mod:
     uses: PanzerDevOrg/PanzerBuildLogic/.github/workflows/mod-ci.yml@master
