@@ -93,10 +93,31 @@ public final class TesseraCompat {
     public static int spriteAbgr(TextureAtlasSprite sprite, int frame, int x, int y) {
         // Despite the name, getPixelRGBA returns ARGB from 1.21.2 on.
         //? >=1.21.10 {
-        /*return argbToAbgr(sprite.getPixelRGBA(frame, x, y));
+        /*try {
+            return argbToAbgr((int) SPRITE_PIXEL.invokeExact(sprite, frame, x, y));
+        } catch (Throwable t) {
+            throw new IllegalStateException("Tessera: reading a sprite pixel failed", t);
+        }
         *///?} else
         return sprite.getPixelRGBA(frame, x, y);
     }
+
+    //? >=1.21.10 {
+    /*// getPixelRGBA(frame, x, y) (ARGB despite the name), renamed getPixelARGB in 26.3.
+    private static final java.lang.invoke.MethodHandle SPRITE_PIXEL = spritePixel();
+
+    private static java.lang.invoke.MethodHandle spritePixel() {
+        var type = java.lang.invoke.MethodType.methodType(int.class, int.class, int.class, int.class);
+        for (String name : new String[]{"getPixelARGB", "getPixelRGBA"}) {
+            try {
+                return java.lang.invoke.MethodHandles.publicLookup().findVirtual(TextureAtlasSprite.class, name, type);
+            } catch (ReflectiveOperationException ignored) {
+                // the other name
+            }
+        }
+        throw new IllegalStateException("Tessera: no TextureAtlasSprite pixel getter");
+    }
+    *///?}
 
     public static int argbToAbgr(int argb) {
         return (argb & 0xFF00FF00) | ((argb >>> 16) & 0xFF) | ((argb & 0xFF) << 16);
