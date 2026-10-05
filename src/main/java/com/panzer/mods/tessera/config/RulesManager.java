@@ -20,10 +20,19 @@ public final class RulesManager implements PreparableReloadListener {
     public RulesManager() {
     }
 
+    //? >=1.21.10 {
+    /*@Override
+    public CompletableFuture<Void> reload(SharedState sharedState, Executor backgroundExecutor,
+                                          PreparationBarrier preparationBarrier, Executor gameExecutor) {
+        return CompletableFuture.runAsync(() -> {
+        }, gameExecutor).thenCompose(preparationBarrier::wait);
+    }
+    *///?} else {
     @Override
     @NotNull
     public CompletableFuture<Void> reload(PreparationBarrier preparationBarrier, @NotNull ResourceManager resourceManager, @NotNull ProfilerFiller profilerFiller, @NotNull ProfilerFiller profilerFiller1, @NotNull Executor executor, @NotNull Executor executor1) {
         return CompletableFuture.runAsync(() -> {
         }, executor1).thenCompose(preparationBarrier::wait);
     }
+    //?}
 }

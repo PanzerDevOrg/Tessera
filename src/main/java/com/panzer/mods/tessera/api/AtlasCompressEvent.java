@@ -1,6 +1,9 @@
 package com.panzer.mods.tessera.api;
 
 import com.panzer.mods.tessera.cache.AtlasCache.CompressedFormat;
+//? >=1.21.11 {
+/*import net.minecraft.resources.Identifier;
+*///?} else
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.bus.api.Event;
 import net.neoforged.bus.api.ICancellableEvent;
@@ -20,12 +23,21 @@ import net.neoforged.bus.api.ICancellableEvent;
 @SuppressWarnings("unused")
 public abstract class AtlasCompressEvent extends Event {
 
+    //? >=1.21.11 {
+    /*private final Identifier atlasLocation;
+    *///?} else
     private final ResourceLocation atlasLocation;
 
+    //? >=1.21.11 {
+    /*public AtlasCompressEvent(Identifier atlasLocation) {
+    *///?} else
     public AtlasCompressEvent(ResourceLocation atlasLocation) {
         this.atlasLocation = atlasLocation;
     }
 
+    //? >=1.21.11 {
+    /*public Identifier getAtlasLocation() {
+    *///?} else
     public ResourceLocation getAtlasLocation() {
         return atlasLocation;
     }
@@ -34,6 +46,9 @@ public abstract class AtlasCompressEvent extends Event {
 
         private CompressedFormat targetFormat;
 
+        //? >=1.21.11 {
+        /*public Pre(Identifier atlasLocation, CompressedFormat defaultFormat) {
+        *///?} else
         public Pre(ResourceLocation atlasLocation, CompressedFormat defaultFormat) {
             super(atlasLocation);
             this.targetFormat = defaultFormat;
@@ -54,6 +69,9 @@ public abstract class AtlasCompressEvent extends Event {
         private final long vramBytesSaved;
         private final long residentBytes;
 
+        //? >=1.21.11 {
+        /*public Post(Identifier atlasLocation, CompressedFormat appliedFormat, long vramBytesSaved, long residentBytes) {
+        *///?} else
         public Post(ResourceLocation atlasLocation, CompressedFormat appliedFormat, long vramBytesSaved, long residentBytes) {
             super(atlasLocation);
             this.appliedFormat = appliedFormat;

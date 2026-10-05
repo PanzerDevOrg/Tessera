@@ -16,11 +16,17 @@ public final class DataGenerators {
         eventBus.addListener(DataGenerators::gatherData);
     }
 
+    //? >=1.21.10 {
+    /*private static void gatherData(GatherDataEvent.Client event) {
+        event.createProvider(EnUsLanguageProvider::new);
+        event.createProvider(EsEsLanguageProvider::new);
+    }
+    *///?} else {
     private static void gatherData(GatherDataEvent event) {
         DataGenerator generator = event.getGenerator();
         PackOutput packOutput = generator.getPackOutput();
-
         generator.addProvider(event.includeClient(), new EnUsLanguageProvider(packOutput));
         generator.addProvider(event.includeClient(), new EsEsLanguageProvider(packOutput));
     }
+    //?}
 }

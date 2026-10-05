@@ -17,8 +17,12 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+//? >=1.21.10 {
+/*import com.panzer.mods.tessera.compat.TesseraCompat;
+import com.panzer.mods.tessera.gui.DebugOverlay;
+import net.neoforged.neoforge.client.event.AddClientReloadListenersEvent;
+*///?} else
 import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
-import net.neoforged.neoforge.client.event.TextureAtlasStitchedEvent;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import org.slf4j.Logger;
@@ -67,9 +71,11 @@ public final class Tessera {
         modEventBus.addListener(this::onConfigLoading);
 
         modEventBus.addListener(this::onClientSetup);
-        modEventBus.addListener(this::onAtlasStitched);
         modEventBus.addListener(this::onRegisterReloadListeners);
         modEventBus.addListener(this::onConfigReloading);
+        //? >=1.21.10 {
+        /*modEventBus.addListener(DebugOverlay::registerDebugEntries);
+        *///?}
 
         DataGenerators.register(modEventBus);
     }
@@ -94,18 +100,15 @@ public final class Tessera {
         });
     }
 
-    private void onAtlasStitched(TextureAtlasStitchedEvent event) {
-        // Per-atlas counter resets are now handled generically in
-        // SpriteLoaderMixin#tessera$interceptUpload via TesseraDebugOverlay.resetAtlas(),
-        // which subtracts only this atlas's own prior contribution instead of zeroing
-        // the whole aggregate (which would also erase other atlases' recorded savings).
-        LOGGER.info("Atlas {} stitched with {} sprites.",
-                event.getAtlas().location(), event.getAtlas().getTextures().size());
+    //? >=1.21.10 {
+    /*private void onRegisterReloadListeners(AddClientReloadListenersEvent event) {
+        event.addListener(TesseraCompat.id("rules"), new RulesManager());
     }
-
+    *///?} else {
     private void onRegisterReloadListeners(RegisterClientReloadListenersEvent event) {
         event.registerReloadListener(new RulesManager());
     }
+    //?}
 
     private void onConfigLoading(ModConfigEvent.Loading event) {
         if (event.getConfig().getSpec() == Config.SPEC) {

@@ -1,6 +1,6 @@
 package com.panzer.mods.tessera.atlas;
 
-import com.mojang.blaze3d.systems.RenderSystem;
+import com.panzer.mods.tessera.compat.TesseraCompat;
 import com.panzer.mods.tessera.cache.AtlasCache;
 import com.panzer.mods.tessera.compress.Bc1TextureFormatSupport;
 import com.panzer.mods.tessera.compress.Bc7GpuSupport;
@@ -10,7 +10,6 @@ import com.panzer.mods.tessera.config.Config;
 import com.panzer.mods.tessera.gui.DebugOverlay;
 import com.panzer.mods.tessera.vram.VramBudgetEngine;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-import net.minecraft.resources.ResourceLocation;
 import net.neoforged.fml.loading.FMLPaths;
 import org.lwjgl.opengl.*;
 import org.slf4j.Logger;
@@ -81,10 +80,15 @@ public final class AtlasCompressionDriver {
         int[] destX = new int[regions.size()];
         int[] destY = new int[regions.size()];
 
+        // Each sprite's region in the atlas: its pixels, plus (1.21.11+) a padding
+        // ring that repeats its edge pixels, as vanilla's animate_sprite blit draws it.
+        int[] paddings = new int[regions.size()];
         int index = 0;
         for (TextureAtlasSprite sprite : regions) {
-            int spriteWidth = sprite.contents().width();
-            int spriteHeight = sprite.contents().height();
+            int padding = TesseraCompat.padding(sprite);
+            int spriteWidth = sprite.contents().width() + 2 * padding;
+            int spriteHeight = sprite.contents().height() + 2 * padding;
+            paddings[index] = padding;
             widths[index] = spriteWidth;
             heights[index] = spriteHeight;
             srcOffsets[index] = (int) totalPixelBytes;
@@ -102,10 +106,15 @@ public final class AtlasCompressionDriver {
             int spriteWidth = widths[index];
             int spriteHeight = heights[index];
 
+            int padding = paddings[index];
+            int maxX = sprite.contents().width() - 1;
+            int maxY = sprite.contents().height() - 1;
             pixels.position(srcOffsets[index]);
             for (int y = 0; y < spriteHeight; y++) {
                 for (int x = 0; x < spriteWidth; x++) {
-                    pixels.putInt(sprite.getPixelRGBA(0, x, y));
+                    int sx = Math.max(0, Math.min(maxX, x - padding));
+                    int sy = Math.max(0, Math.min(maxY, y - padding));
+                    pixels.putInt(TesseraCompat.spriteAbgr(sprite, 0, sx, sy));
                 }
             }
 
@@ -172,7 +181,7 @@ public final class AtlasCompressionDriver {
      * means compression was skipped; the caller keeps the uncompressed atlas)
      */
     public static CompressedAtlas compress(
-            ResourceLocation atlasLocation, CompressionPipeline.Target target,
+            String atlasLocation, CompressionPipeline.Target target,
             ByteBuffer baseRgba8, int baseWidth, int baseHeight, int requestedMaxLevel
     ) {
         return compress(atlasLocation, target, baseRgba8, baseWidth, baseHeight, requestedMaxLevel, Integer.MAX_VALUE);
@@ -186,7 +195,7 @@ public final class AtlasCompressionDriver {
      */
     @SuppressWarnings("LoggingSimilarMessage")
     public static CompressedAtlas compress(
-            ResourceLocation atlasLocation, CompressionPipeline.Target target,
+            String atlasLocation, CompressionPipeline.Target target,
             ByteBuffer baseRgba8, int baseWidth, int baseHeight, int requestedMaxLevel, int retainRgbaFromLevel
     ) {
         if (target == CompressionPipeline.Target.BC7 && !Bc7GpuSupport.isSupported()) {
@@ -286,7 +295,7 @@ public final class AtlasCompressionDriver {
         try {
             long resident = tessera$uploadInner(textureId, compressed);
             // -1 (nothing uploaded) clears the entry: the atlas stays vanilla RGBA.
-            VramBudgetEngine.recordResident(compressed.atlasLocation().toString(), resident);
+            VramBudgetEngine.recordResident(compressed.atlasLocation(), resident);
             return resident;
         } finally {
             GL43.glPopDebugGroup();
@@ -313,7 +322,14 @@ public final class AtlasCompressionDriver {
     }
 
     private static long tessera$uploadInner(int textureId, CompressedAtlas compressed) {
-        RenderSystem.bindTexture(textureId);
+        if (TesseraCompat.FULL_CHAIN_REQUIRED && !isFullChain(compressed)) {
+            // Texture views reset GL_TEXTURE_MAX_LEVEL to the full chain: a level
+            // left in RGBA next to compressed ones would make the atlas incomplete.
+            LOGGER.warn("Atlas {}: compressed mip chain incomplete ({} of {} levels); keeping it uncompressed.",
+                    compressed.atlasLocation(), compressed.levels().size(), compressed.requestedMaxLevel() + 1);
+            return -1;
+        }
+        TesseraCompat.bindTexture(textureId);
 
         // requestedMaxLevel is the atlas's own mip level count. It only bounds
         // how deep this upload goes: on vanilla's mutable storage,
@@ -370,6 +386,23 @@ public final class AtlasCompressionDriver {
         return totalResidentBytes;
     }
 
+    /** Levels 0..requestedMaxLevel, in order, each with exactly the block bytes its size needs. */
+    private static boolean isFullChain(CompressedAtlas compressed) {
+        if (compressed.levels().size() != compressed.requestedMaxLevel() + 1) {
+            return false;
+        }
+        for (int i = 0; i < compressed.levels().size(); i++) {
+            CompressedLevel level = compressed.levels().get(i);
+            int blocksWide = ((level.width() + 3) & ~3) / 4;
+            int blocksHigh = ((level.height() + 3) & ~3) / 4;
+            if (level.level() != i || level.compressedBlocks() == null
+                    || level.compressedBlocks().remaining() != blocksWide * blocksHigh * compressed.target().bytesPerBlock()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static void applyTextureFilteringState(int maxMipLevel) {
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER,
                 maxMipLevel > 0 ? GL11.GL_NEAREST_MIPMAP_LINEAR : GL11.GL_NEAREST);
@@ -379,7 +412,7 @@ public final class AtlasCompressionDriver {
     }
 
     private static boolean uploadCompressedLevel(
-            ResourceLocation atlasLocation, CompressionPipeline.Target target,
+            String atlasLocation, CompressionPipeline.Target target,
             int level, int width, int height, ByteBuffer compressedBlocks
     ) {
         if (compressedBlocks == null) {
@@ -481,7 +514,7 @@ public final class AtlasCompressionDriver {
      * this pipeline that must run on the render thread.
      */
     public record CompressedAtlas(
-            ResourceLocation atlasLocation,
+            String atlasLocation,
             CompressionPipeline.Target target,
             List<CompressedLevel> levels,
             int requestedMaxLevel,
@@ -490,7 +523,7 @@ public final class AtlasCompressionDriver {
             // patched and re-encoded block by block. Empty for most atlases.
             Map<Integer, MipChainBuilder.MipLevel> retainedRgba
     ) {
-        public CompressedAtlas(ResourceLocation atlasLocation, CompressionPipeline.Target target,
+        public CompressedAtlas(String atlasLocation, CompressionPipeline.Target target,
                                List<CompressedLevel> levels, int requestedMaxLevel) {
             this(atlasLocation, target, levels, requestedMaxLevel, Map.of());
         }

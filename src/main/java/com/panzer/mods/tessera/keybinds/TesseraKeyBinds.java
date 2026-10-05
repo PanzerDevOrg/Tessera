@@ -1,5 +1,8 @@
 package com.panzer.mods.tessera.keybinds;
 
+// 1.21.1 only: from 1.21.10 the breakdown is its own debug screen entry,
+// toggled in vanilla's debug options like any other.
+//? <1.21.10 {
 import com.mojang.blaze3d.platform.InputConstants;
 import com.panzer.mods.tessera.Tessera;
 import com.panzer.mods.tessera.config.Config;
@@ -13,10 +16,12 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.InputEvent;
 import org.lwjgl.glfw.GLFW;
 
-// Compatibility for 1.21
-@SuppressWarnings("removal")
-@EventBusSubscriber(modid = Tessera.MOD_ID, value = Dist.CLIENT, bus = EventBusSubscriber.Bus.GAME)
+// F3+4 toggles the per-atlas breakdown in the F3 text.
+@EventBusSubscriber(modid = Tessera.MOD_ID, value = Dist.CLIENT)
 public final class TesseraKeyBinds {
+
+    private TesseraKeyBinds() {
+    }
 
     @SubscribeEvent
     public static void onKeyInput(InputEvent.Key event) {
@@ -47,3 +52,4 @@ public final class TesseraKeyBinds {
         }
     }
 }
+//?}

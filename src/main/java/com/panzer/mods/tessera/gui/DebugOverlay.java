@@ -1,13 +1,7 @@
 package com.panzer.mods.tessera.gui;
 
-import com.panzer.mods.tessera.Tessera;
 import com.panzer.mods.tessera.config.Config;
 import com.panzer.mods.tessera.vram.VramBudgetEngine;
-import net.minecraft.client.Minecraft;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.CustomizeGuiOverlayEvent;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11;
 
@@ -17,9 +11,14 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-// Compatibility for 1.21
-@SuppressWarnings("removal")
-@EventBusSubscriber(modid = Tessera.MOD_ID, value = Dist.CLIENT, bus = EventBusSubscriber.Bus.GAME)
+/**
+ * Tessera's lines in the F3 screen: a summary (compression on or off, atlas
+ * VRAM and savings, budget, GPU memory) and a per-atlas breakdown. Up to
+ * 1.21.1 they are appended to F3's right column, the breakdown toggled with
+ * F3+4. From 1.21.10 they are two debug screen entries,
+ * {@code tessera:atlas_compression} (shown with F3 by default) and
+ * {@code tessera:atlas_compression_breakdown}, toggled in vanilla's debug options.
+ */
 public final class DebugOverlay {
 
     private static final int GL_GPU_MEM_INFO_TOTAL_AVAILABLE_NVX = 0x9048;
@@ -85,48 +84,75 @@ public final class DebugOverlay {
         return Map.copyOf(perAtlasStats);
     }
 
-    @SubscribeEvent
-    public static void onRenderDebugText(CustomizeGuiOverlayEvent.DebugText event) {
-        Minecraft mc = Minecraft.getInstance();
+    /** Compression status, atlas VRAM, budget and GPU memory. */
+    public static List<String> summaryLines() {
+        List<String> lines = new ArrayList<>();
+        lines.add("§d[Tessera]");
 
-        if (mc.gui.getDebugOverlay().showDebugScreen()) {
+        int budgetTargetMB = VramBudgetEngine.getEffectiveBudgetMb();
+        boolean isMac = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac");
+
+        if (isMac) {
+            lines.add("Compression: §cUNSUPPORTED (macOS)§r");
+        } else if (!isCompressedAtlasActive || bytesSavedByBC7 <= 0) {
+            lines.add("Compression: §cDISABLED§r");
+            lines.add(String.format("VRAM Budget: %d MB", budgetTargetMB));
+            lines.add("VRAM: " + getHardwareVramUsage());
+        } else {
+            lines.add("Compression: §aENABLED§r");
+
+            double savedMB = bytesSavedByBC7 / (1024.0 * 1024.0);
+            double compressedMB = totalCompressedAtlasBytes / (1024.0 * 1024.0);
+            double originalMB = compressedMB + savedMB;
+            double percentageSaved = originalMB > 0 ? (savedMB / originalMB) * 100.0 : 0;
+
+            lines.add(String.format("Atlas VRAM: §b%.2f MB§r / §7%.2f MB§r (§a-%.1f%%§r)",
+                    compressedMB, originalMB, percentageSaved));
+            lines.add(String.format("Saved: §a%.2f MB§r", savedMB));
+            lines.add(String.format("VRAM Budget: %d MB", budgetTargetMB));
+
+            lines.add("GPU VRAM: " + getHardwareVramUsage());
+        }
+        return lines;
+    }
+
+    /** Savings per atlas, and per bucket within an atlas. */
+    public static List<String> breakdownLines() {
+        List<String> lines = new ArrayList<>();
+        appendPerAtlasBreakdown(lines);
+        return lines;
+    }
+
+    //? >=1.21.10 {
+    /*public static void registerDebugEntries(net.neoforged.neoforge.client.event.RegisterDebugEntriesEvent event) {
+        var summary = com.panzer.mods.tessera.compat.TesseraCompat.id("atlas_compression");
+        var breakdown = com.panzer.mods.tessera.compat.TesseraCompat.id("atlas_compression_breakdown");
+        event.register(summary, (displayer, level, clientChunk, serverChunk) -> displayer.addToGroup(summary, summaryLines()));
+        event.register(breakdown, (displayer, level, clientChunk, serverChunk) -> displayer.addToGroup(breakdown, breakdownLines()));
+        event.includeInProfile(summary, net.minecraft.client.gui.components.debug.DebugScreenProfile.DEFAULT,
+                net.minecraft.client.gui.components.debug.DebugScreenEntryStatus.IN_F3);
+    }
+    *///?} else {
+    @net.neoforged.fml.common.EventBusSubscriber(modid = com.panzer.mods.tessera.Tessera.MOD_ID,
+            value = net.neoforged.api.distmarker.Dist.CLIENT)
+    public static final class F3Text {
+
+        private F3Text() {
+        }
+
+        @net.neoforged.bus.api.SubscribeEvent
+        public static void onRenderDebugText(net.neoforged.neoforge.client.event.CustomizeGuiOverlayEvent.DebugText event) {
+            if (!net.minecraft.client.Minecraft.getInstance().gui.getDebugOverlay().showDebugScreen()) {
+                return;
+            }
             List<String> rightList = event.getRight();
             List<String> tesseraLines = new ArrayList<>();
-
             tesseraLines.add("");
-            tesseraLines.add("§d[Tessera]");
-
-            int budgetTargetMB = VramBudgetEngine.getEffectiveBudgetMb();
-            boolean isMac = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac");
-
-            if (isMac) {
-                tesseraLines.add("Compression: §cUNSUPPORTED (macOS)§r");
-            } else if (!isCompressedAtlasActive || bytesSavedByBC7 <= 0) {
-                tesseraLines.add("Compression: §cDISABLED§r");
-                tesseraLines.add(String.format("VRAM Budget: %d MB", budgetTargetMB));
-                tesseraLines.add("VRAM: " + getHardwareVramUsage());
-            } else {
-                tesseraLines.add("Compression: §aENABLED§r");
-
-                double savedMB = bytesSavedByBC7 / (1024.0 * 1024.0);
-                double compressedMB = totalCompressedAtlasBytes / (1024.0 * 1024.0);
-                double originalMB = compressedMB + savedMB;
-                double percentageSaved = originalMB > 0 ? (savedMB / originalMB) * 100.0 : 0;
-
-                tesseraLines.add(String.format("Atlas VRAM: §b%.2f MB§r / §7%.2f MB§r (§a-%.1f%%§r)",
-                        compressedMB, originalMB, percentageSaved));
-                tesseraLines.add(String.format("Saved: §a%.2f MB§r", savedMB));
-                tesseraLines.add(String.format("VRAM Budget: %d MB", budgetTargetMB));
-
-                tesseraLines.add("GPU VRAM: " + getHardwareVramUsage());
-
-                if (Config.SHOW_EXTENDED_DEBUG_BREAKDOWN.get()) {
-                    appendPerAtlasBreakdown(tesseraLines);
-                }
+            tesseraLines.addAll(summaryLines());
+            if (isCompressedAtlasActive && bytesSavedByBC7 > 0 && Config.SHOW_EXTENDED_DEBUG_BREAKDOWN.get()) {
+                tesseraLines.addAll(breakdownLines());
             }
-
             int insertIndex = getIndex(rightList);
-
             if (insertIndex != -1 && insertIndex <= rightList.size()) {
                 rightList.addAll(insertIndex, tesseraLines);
             } else {
@@ -134,6 +160,7 @@ public final class DebugOverlay {
             }
         }
     }
+    //?}
 
     private static int getIndex(List<String> rightList) {
         for (int i = 0; i < rightList.size(); i++) {
