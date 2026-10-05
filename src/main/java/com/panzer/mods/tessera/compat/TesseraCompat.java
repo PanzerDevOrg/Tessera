@@ -9,11 +9,9 @@ import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import java.util.IdentityHashMap;
 import java.util.concurrent.Executor;
 
-//? >=1.21.10 {
-/*import com.mojang.blaze3d.opengl.GlStateManager;
-import com.mojang.blaze3d.opengl.GlTexture;
-*///?} else
+//? <1.21.10 {
 import com.mojang.blaze3d.systems.RenderSystem;
+//?}
 //? >=1.21.11 {
 /*import net.minecraft.util.Util;
 *///?} else
@@ -58,17 +56,27 @@ public final class TesseraCompat {
     /** OpenGL name of a texture. */
     public static int glId(AbstractTexture texture) {
         //? >=1.21.10 {
-        /*Object gpu = texture.getTexture();
-        // NeoForge's GPU validation layer (on in dev runs) wraps every texture:
-        // ValidationGpuTexture.getRealTexture() is the GL one underneath.
-        for (int depth = 0; !(gpu instanceof GlTexture) && depth < 4; depth++) {
-            try {
-                gpu = gpu.getClass().getMethod("getRealTexture").invoke(gpu);
-            } catch (ReflectiveOperationException e) {
-                throw new IllegalStateException("not an OpenGL texture: " + gpu.getClass().getName(), e);
+        /*// Through reflection: the GPU texture types moved from com.mojang.blaze3d to
+        // com.mojang.renderpearl in 26.3 (the 26.1 build also runs there), and
+        // NeoForge's validation layer (dev runs) wraps them: getRealTexture() is the
+        // GL texture underneath. Its glId() kept its name.
+        try {
+            Object gpu = AbstractTexture.class.getMethod("getTexture").invoke(texture);
+            for (int depth = 0; depth < 4; depth++) {
+                java.lang.reflect.Method glId = method(gpu.getClass(), "glId");
+                if (glId != null) {
+                    return (int) glId.invoke(gpu);
+                }
+                java.lang.reflect.Method real = method(gpu.getClass(), "getRealTexture");
+                if (real == null) {
+                    break;
+                }
+                gpu = real.invoke(gpu);
             }
+            throw new IllegalStateException("not an OpenGL texture: " + gpu.getClass().getName());
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Tessera: no GL id for " + texture, e);
         }
-        return ((GlTexture) gpu).glId();
         *///?} else
         return texture.getId();
     }
@@ -76,10 +84,42 @@ public final class TesseraCompat {
     /** Binds a texture to GL_TEXTURE_2D through the game's state cache. */
     public static void bindTexture(int glId) {
         //? >=1.21.10 {
-        /*GlStateManager._bindTexture(glId);
+        /*if (BIND_TEXTURE != null) {
+            try {
+                BIND_TEXTURE.invokeExact(glId);
+                return;
+            } catch (Throwable t) {
+                throw new IllegalStateException("Tessera: binding a texture failed", t);
+            }
+        }
+        // 26.3 has no GlStateManager._bindTexture; its renderer binds per draw.
+        org.lwjgl.opengl.GL11.glBindTexture(org.lwjgl.opengl.GL11.GL_TEXTURE_2D, glId);
         *///?} else
         RenderSystem.bindTexture(glId);
     }
+
+    //? >=1.21.10 {
+    /*// GlStateManager._bindTexture(int): com.mojang.blaze3d.opengl up to 26.2, gone in 26.3.
+    private static final java.lang.invoke.MethodHandle BIND_TEXTURE = bindTextureHandle();
+
+    private static java.lang.invoke.MethodHandle bindTextureHandle() {
+        try {
+            Class<?> state = Class.forName("com.mojang.blaze3d.opengl.GlStateManager");
+            return java.lang.invoke.MethodHandles.publicLookup().findStatic(state, "_bindTexture",
+                    java.lang.invoke.MethodType.methodType(void.class, int.class));
+        } catch (ReflectiveOperationException e) {
+            return null;
+        }
+    }
+
+    private static java.lang.reflect.Method method(Class<?> type, String name) {
+        try {
+            return type.getMethod(name);
+        } catch (NoSuchMethodException e) {
+            return null;
+        }
+    }
+    *///?}
 
     /** A pixel as ABGR (R in the low byte: R, G, B, A when written little-endian). */
     public static int abgr(NativeImage image, int x, int y) {
