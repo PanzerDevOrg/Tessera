@@ -7,6 +7,7 @@ import com.panzer.mods.tessera.compress.software.SoftwareBc1Encoder;
 import com.panzer.mods.tessera.compress.software.SoftwareBc7Encoder;
 import com.panzer.mods.tessera.compress.software.TransparentTexelBleed;
 import com.panzer.mods.tessera.config.Config;
+import com.panzer.mods.tessera.selftest.TesseraSelfTest;
 import net.minecraft.client.renderer.texture.SpriteContents;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
@@ -341,6 +342,27 @@ public final class CompressedAnimationUploader {
      * texels (fire, lanterns, campfires: under 20 dB, found by the self-test).
      */
     private static ByteBuffer encodeBlocks(ByteBuffer rgba, int w, int h, CompressionPipeline.Target target) {
+        if (!TesseraSelfTest.ENABLED) {
+            return encodeBlocksUntimed(rgba, w, h, target);
+        }
+        // Self-test: what the encoder used here costs, against the plain software one.
+        ByteBuffer copy = ByteBuffer.allocateDirect(w * h * 4).order(ByteOrder.LITTLE_ENDIAN);
+        copy.put(rgba.duplicate()).flip();
+        long start = System.nanoTime();
+        ByteBuffer blocks = encodeBlocksUntimed(rgba, w, h, target);
+        long used = System.nanoTime() - start;
+        start = System.nanoTime();
+        TransparentTexelBleed.apply(copy, w, h);
+        if (target == CompressionPipeline.Target.BC7) {
+            SoftwareBc7Encoder.encode(copy, w, h);
+        } else {
+            SoftwareBc1Encoder.encode(copy, w, h);
+        }
+        EncodeStats.add(used, System.nanoTime() - start);
+        return blocks;
+    }
+
+    private static ByteBuffer encodeBlocksUntimed(ByteBuffer rgba, int w, int h, CompressionPipeline.Target target) {
         boolean bc7 = target == CompressionPipeline.Target.BC7;
         ByteBuffer blocks = (w & 3) == 0 && (h & 3) == 0
                 ? CompressionPipeline.compressBlocking("animation", rgba, w, h, bc7, Config.get(Config.COMPRESSION_QUALITY))
@@ -352,5 +374,24 @@ public final class CompressedAnimationUploader {
             blocks = bc7 ? SoftwareBc7Encoder.encode(copy, w, h) : SoftwareBc1Encoder.encode(copy, w, h);
         }
         return blocks;
+    }
+
+    /** Self-test only: time spent encoding animation frames since the last {@link #reset}. */
+    public static final class EncodeStats {
+        public static long calls, nanos, maxNanos, softwareNanos;
+
+        private EncodeStats() {
+        }
+
+        static void add(long used, long software) {
+            calls++;
+            nanos += used;
+            maxNanos = Math.max(maxNanos, used);
+            softwareNanos += software;
+        }
+
+        public static void reset() {
+            calls = nanos = maxNanos = softwareNanos = 0;
+        }
     }
 }

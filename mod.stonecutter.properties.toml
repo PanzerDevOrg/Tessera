@@ -26,8 +26,8 @@ banner = ""
 # version_range: versions NeoForge accepts at runtime.
 # (No end-of-line comments: the build's TOML readers do not strip them.)
 [depends_on.celeris]
-version = "0.1.0"
-version_range = "[0.1.0,)"
+version = "0.2.0"
+version_range = "[0.2.0,)"
 artifact = "com.panzer.mods:celeris-{mc}"
 maven = "https://panzerdevorg.github.io/Celeris/maven"
 repo = "PanzerDevOrg/Celeris"

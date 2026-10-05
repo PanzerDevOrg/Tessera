@@ -3,6 +3,7 @@ package com.panzer.mods.tessera.selftest;
 import com.panzer.mods.tessera.api.AtlasCompressEvent;
 import com.panzer.mods.tessera.cache.AtlasCache;
 import com.panzer.mods.tessera.compat.TesseraCompat;
+import com.panzer.mods.tessera.compress.CompressedAnimationUploader.EncodeStats;
 import com.panzer.mods.tessera.compress.Bc7GpuSupport;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.TextureAtlas;
@@ -71,6 +72,7 @@ public final class TesseraSelfTest {
             if (Minecraft.getInstance().getTextureManager().getTexture(location) instanceof TextureAtlas atlas) {
                 COMPRESSED.put(location.toString(), new Compressed(atlas, e.getAppliedFormat()));
                 lastCompressedTick = ticks;
+                EncodeStats.reset();
             }
         });
         NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, e -> tick());
@@ -90,6 +92,11 @@ public final class TesseraSelfTest {
         }
         done = true;
         List<String> lines = new ArrayList<>();
+        // Steady state since the last atlas was compressed: what animations cost per client tick.
+        int window = Math.max(1, ticks - lastCompressedTick);
+        lines.add(String.format("animation encoding over %d ticks: %d encodes, %.3f ms per tick (largest %.3f ms);"
+                        + " plain software encoder: %.3f ms per tick", window, EncodeStats.calls,
+                EncodeStats.nanos / 1e6 / window, EncodeStats.maxNanos / 1e6, EncodeStats.softwareNanos / 1e6 / window));
         boolean pass;
         try {
             pass = check(lines);
