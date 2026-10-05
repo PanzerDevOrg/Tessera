@@ -7,68 +7,55 @@
 [![License](https://img.shields.io/badge/Code-AGPLv3-blueviolet?style=for-the-badge)](#license)
 <!-- publish:on -->
 
-**A GPU-first VRAM optimization engine for NeoForge.** Tessera compresses Minecraft's texture atlases into the
-GPU-native **BC7** format in place, cutting atlas VRAM by up to **75%** with no visible difference. Animations keep
-playing, and it needs no setup.
+**Tessera makes Minecraft use less video memory.** It shrinks the game's textures on your graphics card by up to
+75%, and the game looks exactly the same. Helpful with big resource packs, large modpacks, or a GPU without much
+memory.
 
-> ⚠️ **Requires [Celeris](https://github.com/PanzerDevOrg/Celeris)** (a performance library). Install both.
+- Nothing to set up: install it and play.
+- Water, lava, fire and every other animated texture keep moving.
+- No freezes while textures load; the work happens in the background.
+- Doesn't change how the game draws, so shaders and other visual mods keep working.
+- Press F3 to see how much memory it saves (Minecraft 1.21.10 and newer).
 
----
+> **You also need [Celeris](https://github.com/PanzerDevOrg/Celeris).** Put both in your `mods` folder.
 
-## ✨ Features
-
-| Feature | What it does |
-|---|---|
-| 🧩 **In-place BC7 compression** | Every atlas, including the block atlas, re-encoded right after vanilla uploads it, full mipmaps included |
-| 🌊 **Animations keep working** | Water, lava, fire and every animated texture keep animating on the compressed atlas |
-| 🎨 **Same look** | Near-lossless BC7, with cleanup that avoids white fringes on transparent textures |
-| ⚡ **No stutter** | Compression runs in the background; resource reloads don't freeze the game |
-| 💾 **Disk cache** | Unchanged atlases aren't re-compressed on the next launch |
-| 🛡️ **Never crashes the game** | Native encoder for Windows and Linux, pure-Java fallback everywhere else |
-| 📊 **F3 overlay** | Live VRAM savings in the debug screen |
-
-Rendering, UVs, lighting and shaders are untouched, so Tessera works alongside other rendering mods.
-
-## 📈 Results
+## Before and after
 
 | Version 0.1 (old) | Version 0.2 (new) |
 |:---:|:---:|
 | ![Old version saving 6.13 MB](./docs/media/old_active_mod.png) | ![New version saving 11.88 MB](./docs/media/active_mod.png) |
 
-Up to **75% less** texture-atlas VRAM. Savings depend on resource packs and mods; they grow with texture-heavy packs.
+The number in the corner is the video memory saved. The more textures your packs and mods add, the more it saves.
 
-## 📋 Requirements
+## Will it work for me?
 
-| | |
+- **Minecraft** 1.21 – 1.21.11 and 26.1 – 26.3, on NeoForge. Download the file made for your version.
+- **Windows or Linux.** Macs can't use it: macOS doesn't support the texture format Tessera needs.
+- **Your computer only.** Servers don't need it, and you can join any server with it.
+
+## Learn more
+
+Settings, extra speed tips, how it works and the full version list are on GitHub.
+
+<p align="center">
+<a href="https://github.com/PanzerDevOrg/Tessera"><img src="https://img.shields.io/badge/GitHub-Guide%20%26%20source-24292f?style=for-the-badge&logo=github&logoColor=white" alt="Guide and source on GitHub"></a>
+<a href="https://github.com/PanzerDevOrg/Celeris"><img src="https://img.shields.io/badge/Needs-Celeris-7c3aed?style=for-the-badge" alt="Requires Celeris"></a>
+<a href="https://github.com/PanzerDevOrg/Tessera/issues"><img src="https://img.shields.io/badge/Found%20a%20bug%3F-Tell%20us-d73a4a?style=for-the-badge&logo=github&logoColor=white" alt="Report a bug"></a>
+<a href="https://github.com/PanzerDevOrg/Tessera/tree/master/docs/changelogs"><img src="https://img.shields.io/badge/What's%20new-Changelog-2f81f7?style=for-the-badge&logo=github&logoColor=white" alt="Changelog"></a>
+</p>
+
+<!-- publish:off -->
+
+## Files per version
+
+| Minecraft | Tessera file |
 |---|---|
-| **Minecraft** | 1.21 – 1.21.11 · 26.1 – 26.3 (pick the file for your version) |
-| **Loader** | NeoForge for those versions |
-| **Java** | 21 (Minecraft 1.21.x) · 25 (26.x) |
-| **Requires** | [Celeris](https://github.com/PanzerDevOrg/Celeris) 0.1.0+ |
-| **GPU** | Any GPU with BC7 support (OpenGL 4.2+) |
-| **Side** | Client only (servers don't need it) |
-| **macOS** | Not supported (no BC7 on macOS OpenGL) |
+| 1.21 – 1.21.4 | `tessera-<version>+1.21.1.jar` |
+| 1.21.5 – 1.21.10 | `tessera-<version>+1.21.10.jar` |
+| 1.21.11 | `tessera-<version>+1.21.11.jar` |
+| 26.1 – 26.3 | `tessera-<version>+26.1.jar` |
 
-1. Install NeoForge for your Minecraft version and pick the Tessera (and Celeris) file for it:
-
-   | Minecraft | Tessera file |
-   |---|---|
-   | 1.21 – 1.21.4 | `tessera-<version>+1.21.1.jar` |
-   | 1.21.5 – 1.21.10 | `tessera-<version>+1.21.10.jar` |
-   | 1.21.11 | `tessera-<version>+1.21.11.jar` |
-   | 26.1 – 26.3 | `tessera-<version>+26.1.jar` |
-
-2. Put **Tessera** and **Celeris** in your `mods/` folder.
-3. Launch the game. There is nothing else to set up.
-
-Every version listed is checked in a real game client: each file starts the game on every version it covers and reads
-the compressed atlases back from the GPU against their sprites, animations included. On 1.21.5 – 1.21.9 the F3 screen
-has no Tessera lines (NeoForge added the debug-entry API in 1.21.10); compression is the same.
-
-The standard file works on every system. GitHub releases also offer Windows-only, Linux-only and pure-Java files for
-anyone who wants exactly what their machine runs.
-
-## ⚡ Maximum performance (optional)
+## JVM flags (optional)
 
 Tessera works without any setup. These JVM flags unlock Celeris's fastest code paths:
 
@@ -86,7 +73,7 @@ Where to put them:
 Without the flags nothing breaks; each feature uses its pure-Java fallback. Use `--enable-preview` only with the Java 21
 that Minecraft 1.21.x ships with.
 
-## ⚙️ Configuration
+## Configuration
 
 In the in-game mod settings, or `config/tessera-client.toml`:
 
@@ -99,14 +86,12 @@ In the in-game mod settings, or `config/tessera-client.toml`:
 
 The disk cache is capped at 512 MB; change it with `-Dtessera.cache.maxMB=<MB>`.
 
-## 🔌 For developers
+## For developers
 
 `AtlasCompressEvent.Pre` (cancellable; choose BC7 or BC1 per atlas) and `AtlasCompressEvent.Post` (bytes saved and
 resident) are fired on `NeoForge.EVENT_BUS`.
 
 Source code, issues and docs: **[github.com/PanzerDevOrg/Tessera](https://github.com/PanzerDevOrg/Tessera)**
-
-<!-- publish:off -->
 
 ## How it works
 
