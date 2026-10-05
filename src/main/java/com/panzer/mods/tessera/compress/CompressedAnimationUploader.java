@@ -6,6 +6,7 @@ import com.panzer.mods.tessera.compat.TesseraCompat;
 import com.panzer.mods.tessera.compress.software.SoftwareBc1Encoder;
 import com.panzer.mods.tessera.compress.software.SoftwareBc7Encoder;
 import com.panzer.mods.tessera.compress.software.TransparentTexelBleed;
+import com.panzer.mods.tessera.config.Config;
 import net.minecraft.client.renderer.texture.SpriteContents;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
@@ -313,10 +314,7 @@ public final class CompressedAnimationUploader {
             rect.position(rect.position() + rw * 4);
         }
         rect.flip();
-        TransparentTexelBleed.apply(rect, rw, rh);
-        ByteBuffer blocks = state.target() == CompressionPipeline.Target.BC7
-                ? SoftwareBc7Encoder.encode(rect, rw, rh)
-                : SoftwareBc1Encoder.encode(rect, rw, rh);
+        ByteBuffer blocks = encodeBlocks(rect, rw, rh, state.target());
         GL13.glCompressedTexSubImage2D(GL11.GL_TEXTURE_2D, level, x0, y0, rw, rh, glFormat, blocks);
     }
 
@@ -333,9 +331,26 @@ public final class CompressedAnimationUploader {
             }
         }
         rgba.flip();
-        TransparentTexelBleed.apply(rgba, w, h);
-        return target == CompressionPipeline.Target.BC7
-                ? SoftwareBc7Encoder.encode(rgba, w, h)
-                : SoftwareBc1Encoder.encode(rgba, w, h);
+        return encodeBlocks(rgba, w, h, target);
+    }
+
+    /**
+     * The encoder the rest of the atlas got (native when available, same quality
+     * preset), so animated sprites look like static ones. The plain software
+     * encoder used before lost a lot on blocks mixing transparent and opaque
+     * texels (fire, lanterns, campfires: under 20 dB, found by the self-test).
+     */
+    private static ByteBuffer encodeBlocks(ByteBuffer rgba, int w, int h, CompressionPipeline.Target target) {
+        boolean bc7 = target == CompressionPipeline.Target.BC7;
+        ByteBuffer blocks = (w & 3) == 0 && (h & 3) == 0
+                ? CompressionPipeline.compressBlocking("animation", rgba, w, h, bc7, Config.COMPRESSION_QUALITY.get())
+                : null;
+        if (blocks == null) {
+            ByteBuffer copy = ByteBuffer.allocateDirect(w * h * 4).order(ByteOrder.LITTLE_ENDIAN);
+            copy.put(rgba.duplicate()).flip();
+            TransparentTexelBleed.apply(copy, w, h);
+            blocks = bc7 ? SoftwareBc7Encoder.encode(copy, w, h) : SoftwareBc1Encoder.encode(copy, w, h);
+        }
+        return blocks;
     }
 }

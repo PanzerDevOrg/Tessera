@@ -48,7 +48,7 @@ public final class TesseraSelfTest {
     public static final boolean ENABLED = Boolean.getBoolean("tessera.selftest");
 
     private static final Logger LOGGER = LoggerFactory.getLogger("Tessera/SelfTest");
-    private static final int SETTLE_TICKS = 400, GIVE_UP_TICKS = 6000, ANIMATION_TICKS = 60;
+    private static final int SETTLE_TICKS = 200, GIVE_UP_TICKS = 6000, ANIMATION_TICKS = 60;
     private static final double MIN_STATIC_PSNR = 30.0, MIN_FRAME_PSNR = 20.0;
     private static final int GL_COMPRESSED_RGBA_BPTC_UNORM = 0x8E8C;
     private static final int GL_COMPRESSED_RGB_S3TC_DXT1 = 0x83F0, GL_COMPRESSED_RGBA_S3TC_DXT1 = 0x83F1;
@@ -80,7 +80,9 @@ public final class TesseraSelfTest {
         }
         ticks++;
         Minecraft mc = Minecraft.getInstance();
-        boolean settled = mc.getOverlay() == null && lastCompressedTick >= 0 && ticks - lastCompressedTick >= SETTLE_TICKS;
+        // The block atlas is the largest and usually the last one compressed.
+        boolean blocksDone = COMPRESSED.keySet().stream().anyMatch(name -> name.endsWith("textures/atlas/blocks.png"));
+        boolean settled = mc.getOverlay() == null && blocksDone && ticks - lastCompressedTick >= SETTLE_TICKS;
         if (!settled && ticks < GIVE_UP_TICKS) {
             return;
         }
