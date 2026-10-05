@@ -91,17 +91,17 @@ client_options = ["onboardAccessibility:false", "narrator:0", "soundCategory_mas
 default_quality_preset = 3
 
 # What each build claims to support (merged with the common TOML's block for
-# that version). game_versions beyond the build's own version are candidates
-# under `panzer compat`; the README claims only those that pass. The 1.21.10
+# that version). Every game_versions entry passed the self-test in a real client
+# of that version (`panzer compat`). The 1.21.10
 # build's GpuTexture code path is what 1.21.5 introduced, so it takes 1.21.5+.
 ["1.21.1"]
-minecraft_version_range = "[1.21.1,1.21.2)"
-neo_version_range = "[21.1,21.2)"
+minecraft_version_range = "[1.21,1.21.5)"
+neo_version_range = "[21.0,21.5)"
 game_versions = ["1.21", "1.21.1", "1.21.2", "1.21.3", "1.21.4"]
 
 ["1.21.10"]
-minecraft_version_range = "[1.21.10,1.21.11)"
-neo_version_range = "[21.10,21.11)"
+minecraft_version_range = "[1.21.5,1.21.11)"
+neo_version_range = "[21.5,21.11)"
 game_versions = ["1.21.5", "1.21.6", "1.21.7", "1.21.8", "1.21.9", "1.21.10"]
 
 ["1.21.11"]
@@ -110,6 +110,6 @@ neo_version_range = "[21.11,21.12)"
 game_versions = ["1.21.11"]
 
 ["26.1"]
-minecraft_version_range = "[26.1,26.2)"
-neo_version_range = "[26.1,26.2)"
+minecraft_version_range = "[26.1,26.4)"
+neo_version_range = "[26.1,26.4)"
 game_versions = ["26.1", "26.1.1", "26.1.2", "26.2", "26.3"]
