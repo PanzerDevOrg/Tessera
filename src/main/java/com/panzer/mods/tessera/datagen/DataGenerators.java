@@ -13,6 +13,13 @@ public final class DataGenerators {
     }
 
     public static void register(IEventBus eventBus) {
+        //? <1.21.10 {
+        // From NeoForge 21.4 GatherDataEvent is abstract (Client/Server subclasses) and
+        // listening to it throws; the 1.21.1 build also runs there. Datagen is dev-only.
+        if (java.lang.reflect.Modifier.isAbstract(GatherDataEvent.class.getModifiers())) {
+            return;
+        }
+        //?}
         eventBus.addListener(DataGenerators::gatherData);
     }
 
