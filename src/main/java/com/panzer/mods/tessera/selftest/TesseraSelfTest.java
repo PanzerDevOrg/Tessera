@@ -84,7 +84,7 @@ public final class TesseraSelfTest {
         Minecraft mc = Minecraft.getInstance();
         // The block atlas is the largest and usually the last one compressed.
         boolean blocksDone = COMPRESSED.keySet().stream().anyMatch(name -> name.endsWith("textures/atlas/blocks.png"));
-        boolean settled = mc.getOverlay() == null && blocksDone && ticks - lastCompressedTick >= SETTLE_TICKS;
+        boolean settled = !overlayShown(mc) && blocksDone && ticks - lastCompressedTick >= SETTLE_TICKS;
         if (!settled && ticks < GIVE_UP_TICKS) {
             return;
         }
@@ -279,6 +279,24 @@ public final class TesseraSelfTest {
             }
         }
         return false;
+    }
+
+    /**
+     * Whether an overlay (the resource-loading screen) is up: {@code Minecraft.getOverlay()}
+     * up to 26.1, {@code Minecraft.gui.overlay()} from 26.2. Looked up by name so one
+     * jar checks both.
+     */
+    private static boolean overlayShown(Minecraft mc) {
+        try {
+            try {
+                return Minecraft.class.getMethod("getOverlay").invoke(mc) != null;
+            } catch (NoSuchMethodException e) {
+                Object gui = Minecraft.class.getField("gui").get(mc);
+                return gui.getClass().getMethod("overlay").invoke(gui) != null;
+            }
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Tessera self-test: no way to see the loading overlay", e);
+        }
     }
 
     private static final class Error {
