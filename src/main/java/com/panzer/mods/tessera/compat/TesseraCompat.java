@@ -125,8 +125,14 @@ public final class TesseraCompat {
     public static int abgr(NativeImage image, int x, int y) {
         //? >=1.21.10 {
         /*return argbToAbgr(image.getPixel(x, y));
-        *///?} else
-        return image.getPixelRGBA(x, y);
+        *///?} else {
+        try {
+            int pixel = (int) IMAGE_PIXEL.invokeExact(image, x, y);
+            return ARGB_PIXELS ? argbToAbgr(pixel) : pixel;
+        } catch (Throwable t) {
+            throw new IllegalStateException("Tessera: reading an image pixel failed", t);
+        }
+        //?}
     }
 
     /** A sprite pixel of an animation frame, as ABGR. */
@@ -138,9 +144,40 @@ public final class TesseraCompat {
         } catch (Throwable t) {
             throw new IllegalStateException("Tessera: reading a sprite pixel failed", t);
         }
-        *///?} else
-        return sprite.getPixelRGBA(frame, x, y);
+        *///?} else {
+        int pixel = sprite.getPixelRGBA(frame, x, y);
+        return ARGB_PIXELS ? argbToAbgr(pixel) : pixel;
+        //?}
     }
+
+    //? <1.21.10 {
+    /**
+     * 1.21.2 dropped NativeImage.getPixelRGBA (ABGR) for getPixel (ARGB), and the
+     * sprite's getPixelRGBA returns ARGB from then on too (the 1.21.1 build also
+     * runs on 1.21.2 - 1.21.4).
+     */
+    private static final boolean ARGB_PIXELS = !hasMethod(NativeImage.class, "getPixelRGBA", int.class, int.class);
+    private static final java.lang.invoke.MethodHandle IMAGE_PIXEL = imagePixel();
+
+    private static java.lang.invoke.MethodHandle imagePixel() {
+        try {
+            return java.lang.invoke.MethodHandles.publicLookup().findVirtual(NativeImage.class,
+                    ARGB_PIXELS ? "getPixel" : "getPixelRGBA",
+                    java.lang.invoke.MethodType.methodType(int.class, int.class, int.class));
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Tessera: no NativeImage pixel getter", e);
+        }
+    }
+
+    private static boolean hasMethod(Class<?> type, String name, Class<?>... parameters) {
+        try {
+            type.getMethod(name, parameters);
+            return true;
+        } catch (NoSuchMethodException e) {
+            return false;
+        }
+    }
+    //?}
 
     //? >=1.21.10 {
     /*// getPixelRGBA(frame, x, y) (ARGB despite the name), renamed getPixelARGB in 26.3.
