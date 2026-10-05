@@ -1,8 +1,14 @@
+# Managed by panzer-build-logic (shared/mod/.gitattributes): `panzer sync`
+# overwrites this file.
 #
-# https://help.github.com/articles/dealing-with-line-endings/
-#
-# Linux start script should use lf
+# Shell scripts keep LF and Windows scripts CRLF on every OS; native and
+# archive files are never touched by line-ending conversion.
 /gradlew        text eol=lf
-
-# These are Windows script files and should use crlf
+*.sh            text eol=lf
 *.bat           text eol=crlf
+*.cmd           text eol=crlf
+*.jar           binary
+*.so            binary
+*.dll           binary
+*.dylib         binary
+*.png           binary

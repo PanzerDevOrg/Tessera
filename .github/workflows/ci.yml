@@ -1,0 +1,42 @@
+# Managed by panzer-build-logic (shared/mod/.github/workflows/ci.yml): `panzer sync`
+# overwrites this file. The pipeline is panzer-build-logic's mod-ci.yml, configured
+# by this mod's mod.stonecutter.properties.toml ([natives.*], [depends_on.*],
+# [publish], [ci]):
+#   every push / PR   build, test, package and verify every jar, then a release
+#                     dry run that uploads a private "release-preview" artifact
+#   v* tag            the same, then publish: GitHub release, Modrinth, CurseForge
+#                     (and the Maven repository when [publish] maven_pages = true)
+#   manual run        dry run by default; on a tag ref, untick it to publish
+# Secrets: MODRINTH_TOKEN, CURSEFORGE_TOKEN (see panzer-build-logic/.env.example).
+name: CI
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+    # Docs-only commits rebuild nothing (path filters never apply to tags);
+    # descriptions.yml handles README changes.
+    paths-ignore: ["docs/**", "**.md", "LICENSE*", "NOTICE", ".gitignore"]
+  pull_request:
+    paths-ignore: ["docs/**", "**.md", "LICENSE*", "NOTICE", ".gitignore"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Release dry run: build, check and preview only (on a tag ref, untick to publish)"
+        type: boolean
+        default: true
+      targets:
+        description: "Release targets"
+        type: string
+        default: github,modrinth,curseforge
+
+permissions:
+  contents: write
+
+jobs:
+  mod:
+    uses: PanzerDevOrg/PanzerBuildLogic/.github/workflows/mod-ci.yml@master
+    with:
+      dry-run: ${{ format('{0}', inputs.dry_run) }}
+      targets: ${{ inputs.targets || 'github,modrinth,curseforge' }}
+    secrets: inherit

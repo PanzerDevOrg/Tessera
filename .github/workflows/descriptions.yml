@@ -1,11 +1,14 @@
-name: Sync descriptions
-
+# Managed by panzer-build-logic (shared/mod/.github/workflows/descriptions.yml):
+# `panzer sync` overwrites this file.
+#
 # README.md is the description on Modrinth (pushed by the API) and CurseForge
 # (curseforge.html in the "descriptions" artifact, pasted by hand: CurseForge
 # has no description API).
 #   push to master (README/media/TOML changed): render only, as a private check
 #   v* tag: update Modrinth, so the page changes together with the release
 #   manual run: dry run by default; untick to update Modrinth now
+name: Sync descriptions
+
 on:
   workflow_dispatch:
     inputs:

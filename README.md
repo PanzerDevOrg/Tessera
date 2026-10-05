@@ -179,23 +179,26 @@ src/main/java/com/panzer/mods/tessera/
   vram/                 # VRAM budget
 ```
 
+<!-- panzer:license -->
 ## License
 
 | Content | License |
 |---|---|
-| Source code (Java, C++) | [AGPL-3.0-only](https://www.gnu.org/licenses/agpl-3.0.html), see [`LICENSE-AGPL`](./LICENSE-AGPL) |
-| Artwork, logos and branding | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/), see [`LICENSE-CC`](./LICENSE-CC) |
-| Vendored bc7enc_rdo | MIT / public domain, see [`native/vendor/bc7enc_rdo/LICENSE`](./native/vendor/bc7enc_rdo/LICENSE) |
+| Source code | [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html), see [`LICENSE-AGPL`](./LICENSE-AGPL) |
+| Artwork, branding and documentation | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/), see [`LICENSE-CC`](./LICENSE-CC) |
+| bc7enc_rdo (bundled) | [MIT OR Unlicense](https://github.com/richgel999/bc7enc_rdo), see [`NOTICE`](./NOTICE) |
 
-**Source code:** you may study, modify and redistribute it under the AGPL; if you run a modified version as a network
-service, its source must be available to that service's users.
+**Source code:** you may study, modify and redistribute it under the AGPL; if you run a modified version as a network service, its source must be available to that service's users.
 
 **Artwork:** credit Panzer, no commercial use without permission, and share derivatives under the same license.
 
 See [`LICENSE`](./LICENSE) for the full summary.
+<!-- /panzer:license -->
 
 <!-- publish:on -->
 
 ---
 
+<!-- panzer:footer -->
 Code: **AGPL-3.0** · Art: **CC BY-NC-SA 4.0** · Made by **Panzer**
+<!-- /panzer:footer -->

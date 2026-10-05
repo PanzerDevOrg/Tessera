@@ -1,11 +1,6 @@
 # Tessera build configuration. Merged at configuration time with
-# ../panzer-build-logic/common.stonecutter.properties.toml (see settings.gradle.kts):
+# ../panzer-build-logic/common.stonecutter.properties.toml (panzer.settings):
 # any table declared here replaces the common table of the same name.
-
-[plugins]
-stonecutter = "0.9.7"
-foojay = "1.0.0"
-moddev = "2.0.143"
 
 # No [jvm.modules.*] tables: Tessera needs no preview features or extra modules.
 # Native access goes through JNI (works on every JDK without flags), and SIMD
@@ -18,24 +13,39 @@ name = "Tessera"
 group = "com.panzer.mods"
 package = "com.panzer.mods.tessera"
 version = "0.2.0"
-# SPDX identifier (AGPL v3, no "or later" clause -- see src/main/resources/LICENSE).
-license = "AGPL-3.0-only"
-resources_license = "CC-BY-NC-SA-4.0"
 authors = "Bichal"
 description = "Tessera: live BC7/BC1 atlas compression for low-end and integrated GPU hardware."
 side = "CLIENT"
 issues = "https://github.com/PanzerDevOrg/Tessera/issues"
 banner = ""
 
-# Celeris is both a compile dependency (com.panzer.mods:celeris-<mc>:<version>,
-# from mavenLocal() or https://panzerdevorg.github.io/Celeris/maven) and a
-# required runtime mod (declared in neoforge.mods.toml).
+# Celeris is both a compile dependency and a required runtime mod (declared in
+# neoforge.mods.toml). panzer-build-logic resolves `artifact` ({mc} = the
+# Minecraft version being built) from mavenLocal() first, then from `maven`.
 # version: artifact version compiled against.
 # version_range: versions NeoForge accepts at runtime.
 # (No end-of-line comments: the build's TOML readers do not strip them.)
 [depends_on.celeris]
 version = "0.1.0"
 version_range = "[0.1.0,)"
+artifact = "com.panzer.mods:celeris-{mc}"
+maven = "https://panzerdevorg.github.io/Celeris/maven"
+repo = "PanzerDevOrg/Celeris"
+
+# JNI bridge (native/, CMake), staged from natives/<os>/<arch>/ into the jar.
+# No macOS: OpenGL 4.1 there has no BC7. Other platforms use the pure-Java
+# encoder. CI (panzer-build-logic mod-ci.yml): ci_prepare vendors bc7enc_rdo
+# before every native build; ci_linux_script builds both Linux platforms in
+# one Ubuntu 20.04 container (binaries load on glibc 2.17+), Windows uses CMake.
+[natives.tessera_bridge]
+cmake_dir = "native"
+platforms = ["windows-x86_64", "linux-x86_64", "linux-aarch64"]
+ci_prepare = "native/vendor/bc7enc_rdo/fetch.sh"
+ci_linux_script = "native/build-linux.sh"
+
+# Third-party code inside the jar (ids from panzer-build-logic/legal/catalog.toml).
+[legal.third_party]
+components = ["bc7enc_rdo"]
 
 # Releases and descriptions (panzer-build-logic/publishing). README.md is the
 # description on GitHub, Modrinth and CurseForge. Per-system jars (only that

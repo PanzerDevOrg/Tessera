@@ -15,10 +15,12 @@ Publishing is done by `panzer-build-logic/publishing` (see its README): the same
    `## Key Features & Changes` with `* **Name**: description` bullets, `---`, `## Performance`.
 2. Set `version` under `[mod]` in `mod.stonecutter.properties.toml` to the new version.
 3. Check the dry run of the last push (`release-preview` artifact): pages, files and tags as they will be published.
-4. Commit, push, then tag: `git tag v<new version> && git push origin v<new version>`.
+4. Commit and push, then tag: `../panzer-build-logic/panzer release tessera --push` (checks the changelog and that
+   the shared files are in sync, then pushes `v<new version>`), or `git tag v<new version> && git push origin v<new version>`.
+   The Mods workflow of panzer-build-logic (*action: release*) does the same from GitHub.
 
 ## Previewing without publishing
 
-- Every push: the **release-preview** artifact of the "Build and Package" run (open `preview.html`).
-- Locally: `python3 ../panzer-build-logic/publishing/panzer_publish.py preview --mod . --out /tmp/preview`.
-- On demand: *Actions → Build and Package → Run workflow* (dry run by default).
+- Every push: the **release-preview** artifact of the "CI" run (open `preview.html`).
+- Locally: `../panzer-build-logic/panzer publish preview --mod . --out /tmp/preview` (after `./gradlew buildAndCollect`).
+- On demand: *Actions → CI → Run workflow* (dry run by default).

@@ -36,7 +36,7 @@ Explicitly NOT vendored: `lodepng.*` (PNG file I/O, unused — Tessera passes ra
 
 ## Populating this directory
 
-Run `./fetch.sh` from this directory before the first native build (CI's `vendor` job does this
-automatically, see `.github/workflows/package.yml`). It checks out the pinned commit into a temp
+Run `./fetch.sh` from this directory before the first native build (CI runs it before every native
+build: `ci_prepare` under `[natives.tessera_bridge]` in `mod.stonecutter.properties.toml`). It checks out the pinned commit into a temp
 directory and copies only the files listed above. Only `VENDORING.md`, `fetch.sh`, `LICENSE` and
 `tessera_bridge.cpp` are tracked in git; the rest is regenerated and git-ignored.

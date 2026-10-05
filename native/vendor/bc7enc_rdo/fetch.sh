@@ -3,6 +3,15 @@ set -euo pipefail
 PINNED_COMMIT="${TESSERA_BC7ENC_RDO_COMMIT:-b9438627eef73a1157e84201b6fa6eb2ffd6d9f0}"
 UPSTREAM_URL="https://github.com/richgel999/bc7enc_rdo.git"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# python3 on Linux/macOS; Windows (Git Bash) may only have a working python.
+PYTHON=""
+for candidate in python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c "" >/dev/null 2>&1; then
+        PYTHON="$candidate"
+        break
+    fi
+done
+[ -n "$PYTHON" ] || { echo "fetch.sh needs Python 3" >&2; exit 1; }
 WORK_DIR="$(mktemp -d)"
 
 trap 'rm -rf "$WORK_DIR"' EXIT
@@ -30,7 +39,7 @@ patch_ert_h() {
     if grep -q '#include <cstdint>' "$file"; then
         return 0
     fi
-    python3 - "$file" << 'PYEOF'
+    "$PYTHON" - "$file" << 'PYEOF'
 import sys
 path = sys.argv[1]
 with open(path) as f:
@@ -51,7 +60,7 @@ patch_utils_cpp() {
     if ! grep -q '#include "lodepng.h"' "$file" && ! grep -q '#include "miniz.h"' "$file"; then
         return 0
     fi
-    python3 - "$file" << 'PYEOF'
+    "$PYTHON" - "$file" << 'PYEOF'
 import sys
 path = sys.argv[1]
 with open(path) as f:
