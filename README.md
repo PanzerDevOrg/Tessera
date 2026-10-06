@@ -61,8 +61,10 @@ Tessera works without any setup. These JVM flags unlock Celeris's fastest code p
 
 | Minecraft (Java) | Add to your JVM arguments |
 |---|---|
-| 1.21.x (Java 21) | `--enable-preview --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED` |
-| 26.x and up (Java 25+) | `--add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED` |
+| 1.21.x (Java 21) | `--enable-preview --add-modules=jdk.incubator.vector` |
+| 26.x and up (Java 25+) | `--add-modules=jdk.incubator.vector` |
+
+Leave `--enable-native-access` out: on Java 21 it switches Celeris's native code off.
 
 Where to put them:
 
