@@ -3,6 +3,7 @@ package com.panzer.mods.tessera.selftest;
 import com.panzer.mods.tessera.api.AtlasCompressEvent;
 import com.panzer.mods.tessera.cache.AtlasCache;
 import com.panzer.mods.tessera.compat.TesseraCompat;
+import com.panzer.mods.tessera.compress.CompressedAnimationUploader;
 import com.panzer.mods.tessera.compress.CompressedAnimationUploader.EncodeStats;
 import com.panzer.mods.tessera.compress.Bc7GpuSupport;
 import net.minecraft.client.Minecraft;
@@ -27,6 +28,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * Client self-test ({@code -Dtessera.selftest=true}, Gradle task {@code selftest}):
@@ -56,7 +58,12 @@ public final class TesseraSelfTest {
     private static final int GL_COMPRESSED_RGBA_BPTC_UNORM = 0x8E8C;
     private static final int GL_COMPRESSED_RGB_S3TC_DXT1 = 0x83F0, GL_COMPRESSED_RGBA_S3TC_DXT1 = 0x83F1;
 
-    private record Compressed(TextureAtlas atlas, AtlasCache.CompressedFormat format) {
+    /**
+     * @param texture what the texture manager holds under the atlas's name, looked up
+     *                at check time: during a reload the event can fire before the new
+     *                atlas is registered there
+     */
+    private record Compressed(Supplier<Object> texture, AtlasCache.CompressedFormat format) {
     }
 
     private static final Map<String, Compressed> COMPRESSED = new LinkedHashMap<>();
@@ -69,11 +76,10 @@ public final class TesseraSelfTest {
     public static void register() {
         NeoForge.EVENT_BUS.addListener(AtlasCompressEvent.Post.class, e -> {
             var location = e.getAtlasLocation();
-            if (Minecraft.getInstance().getTextureManager().getTexture(location) instanceof TextureAtlas atlas) {
-                COMPRESSED.put(location.toString(), new Compressed(atlas, e.getAppliedFormat()));
-                lastCompressedTick = ticks;
-                EncodeStats.reset();
-            }
+            COMPRESSED.put(location.toString(), new Compressed(
+                    () -> Minecraft.getInstance().getTextureManager().getTexture(location), e.getAppliedFormat()));
+            lastCompressedTick = ticks;
+            EncodeStats.reset();
         });
         NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, e -> tick());
     }
@@ -86,7 +92,8 @@ public final class TesseraSelfTest {
         Minecraft mc = Minecraft.getInstance();
         // The block atlas is the largest and usually the last one compressed.
         boolean blocksDone = COMPRESSED.keySet().stream().anyMatch(name -> name.endsWith("textures/atlas/blocks.png"));
-        boolean settled = !overlayShown(mc) && blocksDone && ticks - lastCompressedTick >= SETTLE_TICKS;
+        boolean settled = !overlayShown(mc) && blocksDone && ticks - lastCompressedTick >= SETTLE_TICKS
+                && CompressedAnimationUploader.pendingUpgrades() == 0;
         if (!settled && ticks < GIVE_UP_TICKS) {
             return;
         }
@@ -94,9 +101,10 @@ public final class TesseraSelfTest {
         List<String> lines = new ArrayList<>();
         // Steady state since the last atlas was compressed: what animations cost per client tick.
         int window = Math.max(1, ticks - lastCompressedTick);
-        lines.add(String.format("animation encoding over %d ticks: %d encodes, %.3f ms per tick (largest %.3f ms);"
-                        + " plain software encoder: %.3f ms per tick", window, EncodeStats.calls,
-                EncodeStats.nanos / 1e6 / window, EncodeStats.maxNanos / 1e6, EncodeStats.softwareNanos / 1e6 / window));
+        lines.add(String.format("animation encoding on the render thread over %d ticks: %d encodes, %.3f ms per tick"
+                        + " (largest %.3f ms); best-quality keyframes in the background: %d encodes, %.1f ms",
+                window, EncodeStats.calls, EncodeStats.nanos / 1e6 / window, EncodeStats.maxNanos / 1e6,
+                EncodeStats.bestCalls(), EncodeStats.bestNanos() / 1e6));
         boolean pass;
         try {
             pass = check(lines);
@@ -131,8 +139,13 @@ public final class TesseraSelfTest {
         }
         boolean anyAnimated = false;
         for (var entry : COMPRESSED.entrySet()) {
-            ok &= checkAtlas(entry.getKey(), entry.getValue(), out);
-            anyAnimated |= entry.getValue().atlas().getTextures().values().stream()
+            if (!(entry.getValue().texture().get() instanceof TextureAtlas atlas)) {
+                out.add("  " + entry.getKey() + ": no texture atlas under that name");
+                ok = false;
+                continue;
+            }
+            ok &= checkAtlas(entry.getKey(), atlas, entry.getValue().format(), out);
+            anyAnimated |= atlas.getTextures().values().stream()
                     .anyMatch(sprite -> TesseraCompat.isAnimated(sprite.contents()));
         }
         // Some animations are slow (a GUI icon may hold a frame for seconds), but
@@ -144,8 +157,8 @@ public final class TesseraSelfTest {
         return ok;
     }
 
-    private static boolean checkAtlas(String name, Compressed c, List<String> out) {
-        TextureAtlas atlas = c.atlas();
+    private static boolean checkAtlas(String name, TextureAtlas atlas, AtlasCache.CompressedFormat expectedFormat,
+                                      List<String> out) {
         int glId = TesseraCompat.glId(atlas);
         TesseraCompat.bindTexture(glId);
         int width = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_WIDTH);
@@ -162,12 +175,12 @@ public final class TesseraSelfTest {
                 break;
             }
             int format = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, level, GL11.GL_TEXTURE_INTERNAL_FORMAT);
-            boolean expected = c.format() == AtlasCache.CompressedFormat.BC1
+            boolean expected = expectedFormat == AtlasCache.CompressedFormat.BC1
                     ? format == GL_COMPRESSED_RGB_S3TC_DXT1 || format == GL_COMPRESSED_RGBA_S3TC_DXT1
                     : format == GL_COMPRESSED_RGBA_BPTC_UNORM;
             if (!expected || w != Math.max(1, width >> level) || h != Math.max(1, height >> level)) {
                 out.add(String.format("  %s level %d: %dx%d format 0x%X (expected %s %dx%d)", name, level, w, h, format,
-                        c.format(), Math.max(1, width >> level), Math.max(1, height >> level)));
+                        expectedFormat, Math.max(1, width >> level), Math.max(1, height >> level)));
                 ok = false;
             }
             levels++;
@@ -188,7 +201,7 @@ public final class TesseraSelfTest {
             double staticPsnr = staticError.psnr();
             boolean staticOk = staticPsnr >= MIN_STATIC_PSNR;
             out.add(String.format("%s %s %dx%d, %d levels (max %d): static sprites PSNR %.1f dB over %d texels%s",
-                    name, c.format(), width, height, levels, maxLevel, staticPsnr, staticError.count,
+                    name, expectedFormat, width, height, levels, maxLevel, staticPsnr, staticError.count,
                     staticOk ? "" : " (below " + MIN_STATIC_PSNR + ")"));
             ok &= staticOk;
 

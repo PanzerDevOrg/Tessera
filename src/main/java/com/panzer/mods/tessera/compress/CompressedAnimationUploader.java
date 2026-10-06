@@ -3,6 +3,7 @@ package com.panzer.mods.tessera.compress;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.panzer.mods.tessera.atlas.MipChainBuilder;
 import com.panzer.mods.tessera.compat.TesseraCompat;
+import com.panzer.mods.tessera.compress.backend.TesseraRuntime;
 import com.panzer.mods.tessera.compress.software.SoftwareBc1Encoder;
 import com.panzer.mods.tessera.compress.software.SoftwareBc7Encoder;
 import com.panzer.mods.tessera.compress.software.TransparentTexelBleed;
@@ -21,6 +22,11 @@ import java.nio.ByteOrder;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Keeps animated sprites working on a block-compressed atlas.
@@ -32,13 +38,20 @@ import java.util.Map;
  * 4x4-block-aligned regions, which {@link #alignedMipLevels} guarantees by
  * capping the atlas's compressed mip chain.
  *
+ * <p>Everything encoded on the render thread uses the plain software encoder:
+ * the native one costs about 5 ms per call whatever the size (its setup and
+ * thread pool), and a tick can need over a hundred small encodes, which the
+ * self-test measured at 100-800 ms per tick against under 1 ms in software.
  * <ul>
  *   <li>Keyframes (frames read straight from the sprite's own mip images) are
  *       encoded once and cached: steady-state cost is one small GPU upload per
- *       sprite per frame change, no CPU encoding.</li>
- *   <li>Interpolated frames (blended per tick) are encoded on the fly. Pure-Java
- *       mode-6 BC7 on purpose: a 16x16 sprite is 16 blocks, where the native
- *       encoder's per-call thread-pool spin-up would dominate.</li>
+ *       sprite per frame change, no CPU encoding. The first time a keyframe is
+ *       shown it is encoded in software; when the native encoder is loaded, a
+ *       background thread re-encodes it with the atlas's own encoder and quality,
+ *       and the cache takes that version (the software encoder loses a lot on
+ *       blocks mixing transparent and opaque texels: fire, lanterns, campfires).</li>
+ *   <li>Interpolated frames (blended per tick) and deep mip levels (patched per
+ *       frame change, mixed with neighbouring sprites) are encoded on the fly.</li>
  * </ul>
  *
  * <p>Up to 1.21.10 frames arrive through {@code SpriteContents.upload}
@@ -78,7 +91,27 @@ public final class CompressedAnimationUploader {
     private static AtlasState active;
     private static ByteBuffer rgbaScratch = ByteBuffer.allocateDirect(16 * 16 * 4).order(ByteOrder.LITTLE_ENDIAN);
 
+    /** Best-quality keyframe encodes, one at a time, never on the render thread. */
+    private static final ExecutorService BEST_QUALITY = Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "Tessera animation encoder");
+        thread.setDaemon(true);
+        thread.setPriority(Thread.MIN_PRIORITY);
+        return thread;
+    });
+    /** Finished best-quality keyframes, put in the cache on the render thread. */
+    private static final ConcurrentLinkedQueue<Runnable> UPGRADES = new ConcurrentLinkedQueue<>();
+    private static final AtomicInteger PENDING_UPGRADES = new AtomicInteger();
+
+    /** One aligned mip level of a new keyframe, kept for its best-quality re-encode. */
+    private record LevelInput(ByteBuffer rgba, int width, int height) {
+    }
+
     private CompressedAnimationUploader() {
+    }
+
+    /** Keyframes still waiting for their best-quality re-encode (self-test). */
+    public static int pendingUpgrades() {
+        return PENDING_UPGRADES.get();
     }
 
     /** Animations of an atlas can be kept running once it is compressed. */
@@ -239,6 +272,9 @@ public final class CompressedAnimationUploader {
      */
     private static void writeFrame(AtlasState state, SpriteContents owner, boolean cacheable, long cacheKey,
                                    int x, int y, int width, int height, int frameLevels, FramePixels pixels) {
+        for (Runnable upgrade; (upgrade = UPGRADES.poll()) != null; ) {
+            upgrade.run();
+        }
         TesseraCompat.bindTexture(state.glId());
         ByteBuffer[] cached = null;
         Map<Long, ByteBuffer[]> spriteCache = null;
@@ -251,6 +287,9 @@ public final class CompressedAnimationUploader {
         int glFormat = state.target() == CompressionPipeline.Target.BC7
                 ? GL42.GL_COMPRESSED_RGBA_BPTC_UNORM
                 : EXTTextureCompressionS3TC.GL_COMPRESSED_RGB_S3TC_DXT1_EXT;
+        // A new keyframe: its pixels per level, for the best-quality re-encode.
+        LevelInput[] inputs = cacheable && cached == null && TesseraRuntime.isNativeActive()
+                ? new LevelInput[levels + 1] : null;
 
         for (int level = 0; level <= levels; level++) {
             int w = width >> level;
@@ -267,7 +306,11 @@ public final class CompressedAnimationUploader {
             }
             ByteBuffer blocks = encoded[level];
             if (blocks == null) {
-                blocks = encode(pixels, level, w, h, state.target());
+                ByteBuffer rgba = frameRgba(pixels, level, w, h);
+                if (inputs != null) {
+                    inputs[level] = new LevelInput(copyOf(rgba), w, h);
+                }
+                blocks = encodeFast(rgba, w, h, state.target());
                 encoded[level] = blocks;
             }
             GL13.glCompressedTexSubImage2D(GL11.GL_TEXTURE_2D, level, x >> level, y >> level, w, h, glFormat,
@@ -275,7 +318,59 @@ public final class CompressedAnimationUploader {
         }
         if (cacheable && cached == null) {
             spriteCache.put(cacheKey, encoded);
+            if (inputs != null) {
+                encodeBestLater(spriteCache, cacheKey, encoded, inputs, state.target());
+            }
         }
+    }
+
+    /**
+     * Re-encodes a new keyframe with the atlas's own encoder on the background
+     * thread; the next frame drawn on the render thread puts it in the cache,
+     * unless the entry changed meanwhile (a reload dropped the cache).
+     */
+    private static void encodeBestLater(Map<Long, ByteBuffer[]> spriteCache, long key, ByteBuffer[] fast,
+                                        LevelInput[] inputs, CompressionPipeline.Target target) {
+        PENDING_UPGRADES.incrementAndGet();
+        try {
+            BEST_QUALITY.execute(() -> {
+                try {
+                    ByteBuffer[] best = fast.clone();
+                    boolean bc7 = target == CompressionPipeline.Target.BC7;
+                    int quality = Config.get(Config.COMPRESSION_QUALITY);
+                    for (int level = 0; level < inputs.length; level++) {
+                        LevelInput in = inputs[level];
+                        if (in == null) {
+                            continue;
+                        }
+                        long start = System.nanoTime();
+                        ByteBuffer blocks = CompressionPipeline.compressBlocking("animation", in.rgba(), in.width(),
+                                in.height(), bc7, quality);
+                        if (TesseraSelfTest.ENABLED) {
+                            EncodeStats.addBest(System.nanoTime() - start);
+                        }
+                        if (blocks != null) {
+                            best[level] = blocks;
+                        }
+                    }
+                    UPGRADES.add(() -> {
+                        if (spriteCache.get(key) == fast) {
+                            spriteCache.put(key, best);
+                        }
+                    });
+                } finally {
+                    PENDING_UPGRADES.decrementAndGet();
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            PENDING_UPGRADES.decrementAndGet();
+        }
+    }
+
+    private static ByteBuffer copyOf(ByteBuffer rgba) {
+        ByteBuffer copy = ByteBuffer.allocateDirect(rgba.remaining()).order(ByteOrder.LITTLE_ENDIAN);
+        copy.put(rgba.duplicate()).flip();
+        return copy;
     }
 
     /**
@@ -315,11 +410,12 @@ public final class CompressedAnimationUploader {
             rect.position(rect.position() + rw * 4);
         }
         rect.flip();
-        ByteBuffer blocks = encodeBlocks(rect, rw, rh, state.target());
+        ByteBuffer blocks = encodeFast(rect, rw, rh, state.target());
         GL13.glCompressedTexSubImage2D(GL11.GL_TEXTURE_2D, level, x0, y0, rw, rh, glFormat, blocks);
     }
 
-    private static ByteBuffer encode(FramePixels pixels, int level, int w, int h, CompressionPipeline.Target target) {
+    /** One frame's pixels at a mip level as RGBA8, in the shared scratch buffer. */
+    private static ByteBuffer frameRgba(FramePixels pixels, int level, int w, int h) {
         int bytes = w * h * 4;
         if (rgbaScratch.capacity() < bytes) {
             rgbaScratch = ByteBuffer.allocateDirect(bytes).order(ByteOrder.LITTLE_ENDIAN);
@@ -332,66 +428,55 @@ public final class CompressedAnimationUploader {
             }
         }
         rgba.flip();
-        return encodeBlocks(rgba, w, h, target);
+        return rgba;
+    }
+
+    /** The plain software encoder, for everything encoded on the render thread (bleeds {@code rgba} in place). */
+    private static ByteBuffer encodeFast(ByteBuffer rgba, int w, int h, CompressionPipeline.Target target) {
+        long start = TesseraSelfTest.ENABLED ? System.nanoTime() : 0L;
+        TransparentTexelBleed.apply(rgba, w, h);
+        ByteBuffer blocks = target == CompressionPipeline.Target.BC7
+                ? SoftwareBc7Encoder.encode(rgba, w, h)
+                : SoftwareBc1Encoder.encode(rgba, w, h);
+        if (TesseraSelfTest.ENABLED) {
+            EncodeStats.addFast(System.nanoTime() - start);
+        }
+        return blocks;
     }
 
     /**
-     * The encoder the rest of the atlas got (native when available, same quality
-     * preset), so animated sprites look like static ones. The plain software
-     * encoder used before lost a lot on blocks mixing transparent and opaque
-     * texels (fire, lanterns, campfires: under 20 dB, found by the self-test).
+     * Self-test only: animation encoding time since the last {@link #reset}, on the
+     * render thread (what a tick pays) and on the background thread (best-quality keyframes).
      */
-    private static ByteBuffer encodeBlocks(ByteBuffer rgba, int w, int h, CompressionPipeline.Target target) {
-        if (!TesseraSelfTest.ENABLED) {
-            return encodeBlocksUntimed(rgba, w, h, target);
-        }
-        // Self-test: what the encoder used here costs, against the plain software one.
-        ByteBuffer copy = ByteBuffer.allocateDirect(w * h * 4).order(ByteOrder.LITTLE_ENDIAN);
-        copy.put(rgba.duplicate()).flip();
-        long start = System.nanoTime();
-        ByteBuffer blocks = encodeBlocksUntimed(rgba, w, h, target);
-        long used = System.nanoTime() - start;
-        start = System.nanoTime();
-        TransparentTexelBleed.apply(copy, w, h);
-        if (target == CompressionPipeline.Target.BC7) {
-            SoftwareBc7Encoder.encode(copy, w, h);
-        } else {
-            SoftwareBc1Encoder.encode(copy, w, h);
-        }
-        EncodeStats.add(used, System.nanoTime() - start);
-        return blocks;
-    }
-
-    private static ByteBuffer encodeBlocksUntimed(ByteBuffer rgba, int w, int h, CompressionPipeline.Target target) {
-        boolean bc7 = target == CompressionPipeline.Target.BC7;
-        ByteBuffer blocks = (w & 3) == 0 && (h & 3) == 0
-                ? CompressionPipeline.compressBlocking("animation", rgba, w, h, bc7, Config.get(Config.COMPRESSION_QUALITY))
-                : null;
-        if (blocks == null) {
-            ByteBuffer copy = ByteBuffer.allocateDirect(w * h * 4).order(ByteOrder.LITTLE_ENDIAN);
-            copy.put(rgba.duplicate()).flip();
-            TransparentTexelBleed.apply(copy, w, h);
-            blocks = bc7 ? SoftwareBc7Encoder.encode(copy, w, h) : SoftwareBc1Encoder.encode(copy, w, h);
-        }
-        return blocks;
-    }
-
-    /** Self-test only: time spent encoding animation frames since the last {@link #reset}. */
     public static final class EncodeStats {
-        public static long calls, nanos, maxNanos, softwareNanos;
+        public static long calls, nanos, maxNanos;
+        private static long bestCalls, bestNanos;
 
         private EncodeStats() {
         }
 
-        static void add(long used, long software) {
+        static void addFast(long used) {
             calls++;
             nanos += used;
             maxNanos = Math.max(maxNanos, used);
-            softwareNanos += software;
         }
 
-        public static void reset() {
-            calls = nanos = maxNanos = softwareNanos = 0;
+        static synchronized void addBest(long used) {
+            bestCalls++;
+            bestNanos += used;
+        }
+
+        public static synchronized long bestCalls() {
+            return bestCalls;
+        }
+
+        public static synchronized long bestNanos() {
+            return bestNanos;
+        }
+
+        public static synchronized void reset() {
+            calls = nanos = maxNanos = 0;
+            bestCalls = bestNanos = 0;
         }
     }
 }
