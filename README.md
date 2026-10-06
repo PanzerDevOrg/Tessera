@@ -15,7 +15,7 @@ memory.
 - Water, lava, fire and every other animated texture keep moving.
 - No freezes while textures load; the work happens in the background.
 - Doesn't change how the game draws, so shaders and other visual mods keep working.
-- Press F3 to see how much memory it saves (Minecraft 1.21.10 and newer).
+- Press F3 to see how much video memory it saves (on every version except 1.21.5 – 1.21.9).
 
 > **You also need [Celeris](https://github.com/PanzerDevOrg/Celeris).** Put both in your `mods` folder.
 
