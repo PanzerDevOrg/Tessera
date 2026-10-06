@@ -101,10 +101,10 @@ public final class TesseraSelfTest {
         List<String> lines = new ArrayList<>();
         // Steady state since the last atlas was compressed: what animations cost per client tick.
         int window = Math.max(1, ticks - lastCompressedTick);
-        lines.add(String.format("animation encoding on the render thread over %d ticks: %d encodes, %.3f ms per tick"
-                        + " (largest %.3f ms); best-quality keyframes in the background: %d encodes, %.1f ms",
-                window, EncodeStats.calls, EncodeStats.nanos / 1e6 / window, EncodeStats.maxNanos / 1e6,
-                EncodeStats.bestCalls(), EncodeStats.bestNanos() / 1e6));
+        lines.add(String.format("animation encoding on the render thread over %d ticks: %d encodes (%d more found"
+                        + " by content), %.3f ms per tick (largest %.3f ms); native encodes in the background: %d, %.1f ms",
+                window, EncodeStats.calls, EncodeStats.found, EncodeStats.nanos / 1e6 / window,
+                EncodeStats.maxNanos / 1e6, EncodeStats.bestCalls(), EncodeStats.bestNanos() / 1e6));
         boolean pass;
         try {
             pass = check(lines);

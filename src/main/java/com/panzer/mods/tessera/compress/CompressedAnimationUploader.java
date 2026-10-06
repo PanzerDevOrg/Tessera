@@ -21,6 +21,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
@@ -51,7 +52,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  *       and the cache takes that version (the software encoder loses a lot on
  *       blocks mixing transparent and opaque texels: fire, lanterns, campfires).</li>
  *   <li>Interpolated frames (blended per tick) and deep mip levels (patched per
- *       frame change, mixed with neighbouring sprites) are encoded on the fly.</li>
+ *       frame change, mixed with neighbouring sprites) are looked up by content:
+ *       animations repeat, so each distinct image is encoded once (in software,
+ *       and in the background with the native encoder for interpolated frames),
+ *       then only hashed.</li>
  * </ul>
  *
  * <p>Up to 1.21.10 frames arrive through {@code SpriteContents.upload}
@@ -102,6 +106,15 @@ public final class CompressedAnimationUploader {
     private static final ConcurrentLinkedQueue<Runnable> UPGRADES = new ConcurrentLinkedQueue<>();
     private static final AtomicInteger PENDING_UPGRADES = new AtomicInteger();
 
+    /** Encoded blocks by image content (see {@link #encodeByContent}); render thread only, least recently used out first. */
+    private static final int MAX_BY_CONTENT = 8192;
+    private static final Map<Long, ByteBuffer> BY_CONTENT = new LinkedHashMap<>(256, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<Long, ByteBuffer> eldest) {
+            return size() > MAX_BY_CONTENT;
+        }
+    };
+
     /** One aligned mip level of a new keyframe, kept for its best-quality re-encode. */
     private record LevelInput(ByteBuffer rgba, int width, int height) {
     }
@@ -149,6 +162,7 @@ public final class CompressedAnimationUploader {
     public static void unregister(TextureAtlas atlas) {
         if (COMPRESSED_ATLASES.remove(atlas) != null) {
             KEYFRAME_CACHE.clear();
+            BY_CONTENT.clear();
         }
     }
 
@@ -307,11 +321,16 @@ public final class CompressedAnimationUploader {
             ByteBuffer blocks = encoded[level];
             if (blocks == null) {
                 ByteBuffer rgba = frameRgba(pixels, level, w, h);
-                if (inputs != null) {
-                    inputs[level] = new LevelInput(copyOf(rgba), w, h);
+                if (!cacheable) {
+                    // Interpolated: not a keyframe, but the same blend comes back every cycle.
+                    blocks = encodeByContent(rgba, w, h, state.target(), true);
+                } else {
+                    if (inputs != null) {
+                        inputs[level] = new LevelInput(copyOf(rgba), w, h);
+                    }
+                    blocks = encodeFast(rgba, w, h, state.target());
+                    encoded[level] = blocks;
                 }
-                blocks = encodeFast(rgba, w, h, state.target());
-                encoded[level] = blocks;
             }
             GL13.glCompressedTexSubImage2D(GL11.GL_TEXTURE_2D, level, x >> level, y >> level, w, h, glFormat,
                     blocks.duplicate());
@@ -331,6 +350,20 @@ public final class CompressedAnimationUploader {
      */
     private static void encodeBestLater(Map<Long, ByteBuffer[]> spriteCache, long key, ByteBuffer[] fast,
                                         LevelInput[] inputs, CompressionPipeline.Target target) {
+        encodeBestLater(target, inputs, fast, best -> {
+            if (spriteCache.get(key) == fast) {
+                spriteCache.put(key, best);
+            }
+        });
+    }
+
+    /**
+     * Encodes {@code inputs} with the atlas's own encoder on the background thread,
+     * then hands {@code apply} the result (levels that failed keep {@code fast}) on
+     * the render thread, before the next frame is drawn.
+     */
+    private static void encodeBestLater(CompressionPipeline.Target target, LevelInput[] inputs, ByteBuffer[] fast,
+                                        java.util.function.Consumer<ByteBuffer[]> apply) {
         PENDING_UPGRADES.incrementAndGet();
         try {
             BEST_QUALITY.execute(() -> {
@@ -353,11 +386,7 @@ public final class CompressedAnimationUploader {
                             best[level] = blocks;
                         }
                     }
-                    UPGRADES.add(() -> {
-                        if (spriteCache.get(key) == fast) {
-                            spriteCache.put(key, best);
-                        }
-                    });
+                    UPGRADES.add(() -> apply.accept(best));
                 } finally {
                     PENDING_UPGRADES.decrementAndGet();
                 }
@@ -365,6 +394,58 @@ public final class CompressedAnimationUploader {
         } catch (RejectedExecutionException e) {
             PENDING_UPGRADES.decrementAndGet();
         }
+    }
+
+    /**
+     * Blocks for an image that may have been encoded before: by a 64-bit hash of its
+     * pixels, size and format. A new image is encoded in software now; with
+     * {@code best}, the native encoder redoes it in the background and the cache
+     * takes that version.
+     */
+    private static ByteBuffer encodeByContent(ByteBuffer rgba, int w, int h, CompressionPipeline.Target target,
+                                             boolean best) {
+        long key = contentHash(rgba, w, h, target);
+        ByteBuffer known = BY_CONTENT.get(key);
+        if (known != null) {
+            if (TesseraSelfTest.ENABLED) {
+                EncodeStats.found++;
+            }
+            return known.duplicate();
+        }
+        ByteBuffer input = best && TesseraRuntime.isNativeActive() && (w & 3) == 0 && (h & 3) == 0
+                ? copyOf(rgba) : null;
+        ByteBuffer blocks = encodeFast(rgba, w, h, target);
+        BY_CONTENT.put(key, blocks);
+        if (input != null) {
+            encodeBestLater(target, new LevelInput[]{new LevelInput(input, w, h)}, new ByteBuffer[]{blocks},
+                    better -> {
+                        if (BY_CONTENT.get(key) == blocks) {
+                            BY_CONTENT.put(key, better[0]);
+                        }
+                    });
+        }
+        return blocks.duplicate();
+    }
+
+    private static long contentHash(ByteBuffer rgba, int w, int h, CompressionPipeline.Target target) {
+        long hash = 0x9E3779B97F4A7C15L ^ ((long) w << 32 | (long) h << 1 | target.ordinal());
+        int base = rgba.position();
+        int bytes = w * h * 4;
+        int i = 0;
+        for (; i + 8 <= bytes; i += 8) {
+            hash = mix(hash ^ rgba.getLong(base + i));
+        }
+        for (; i < bytes; i++) {
+            hash = mix(hash ^ (rgba.get(base + i) & 0xFFL));
+        }
+        return hash;
+    }
+
+    /** SplitMix64's finalizer: every input bit reaches every output bit. */
+    private static long mix(long z) {
+        z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;
+        z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;
+        return z ^ (z >>> 31);
     }
 
     private static ByteBuffer copyOf(ByteBuffer rgba) {
@@ -410,7 +491,7 @@ public final class CompressedAnimationUploader {
             rect.position(rect.position() + rw * 4);
         }
         rect.flip();
-        ByteBuffer blocks = encodeFast(rect, rw, rh, state.target());
+        ByteBuffer blocks = encodeByContent(rect, rw, rh, state.target(), false);
         GL13.glCompressedTexSubImage2D(GL11.GL_TEXTURE_2D, level, x0, y0, rw, rh, glFormat, blocks);
     }
 
@@ -449,7 +530,7 @@ public final class CompressedAnimationUploader {
      * render thread (what a tick pays) and on the background thread (best-quality keyframes).
      */
     public static final class EncodeStats {
-        public static long calls, nanos, maxNanos;
+        public static long calls, nanos, maxNanos, found;
         private static long bestCalls, bestNanos;
 
         private EncodeStats() {
@@ -475,7 +556,7 @@ public final class CompressedAnimationUploader {
         }
 
         public static synchronized void reset() {
-            calls = nanos = maxNanos = 0;
+            calls = nanos = maxNanos = found = 0;
             bestCalls = bestNanos = 0;
         }
     }
