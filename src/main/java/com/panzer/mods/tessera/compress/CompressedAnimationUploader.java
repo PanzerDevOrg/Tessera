@@ -122,6 +122,25 @@ public final class CompressedAnimationUploader {
     private CompressedAnimationUploader() {
     }
 
+    /** Compressed uploads registered so far (self-test: it settles once this stops changing). */
+    private static int registrations;
+
+    public static int registrations() {
+        return registrations;
+    }
+
+    /**
+     * Every atlas currently compressed, with its block format (self-test). Read
+     * here rather than from {@code AtlasCompressEvent.Post}: on 1.21 - 1.21.1 the
+     * first reload runs during mod loading, and NeoForge drops events posted to
+     * its bus before loading ends, so early atlases' events never arrive.
+     */
+    public static Map<TextureAtlas, CompressionPipeline.Target> compressedAtlases() {
+        Map<TextureAtlas, CompressionPipeline.Target> out = new LinkedHashMap<>();
+        COMPRESSED_ATLASES.forEach((atlas, state) -> out.put(atlas, state.target()));
+        return out;
+    }
+
     /** Keyframes still waiting for their best-quality re-encode (self-test). */
     public static int pendingUpgrades() {
         return PENDING_UPGRADES.get();
@@ -147,6 +166,7 @@ public final class CompressedAnimationUploader {
             maxLevel++;
         }
         COMPRESSED_ATLASES.put(atlas, new AtlasState(glId, target, maxLevel, alignedLevel, deepLevels, spritesByState));
+        registrations++;
         if (TesseraCompat.GPU_ANIMATION) {
             // The compressed chain holds frame 0 of every animated sprite; show
             // the frame each animation is on now.

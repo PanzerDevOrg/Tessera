@@ -19,6 +19,9 @@ import net.neoforged.bus.api.ICancellableEvent;
  *   <li>{@link Post}: after the compressed chain has been uploaded, with the
  *       VRAM it saved and now occupies.</li>
  * </ul>
+ * On Minecraft 1.21 - 1.21.1 the first resource reload runs while mods are still
+ * loading, and NeoForge's bus drops events posted before loading ends: the events
+ * of that first reload's atlases may never arrive. Later reloads are not affected.
  */
 @SuppressWarnings("unused")
 public abstract class AtlasCompressEvent extends Event {

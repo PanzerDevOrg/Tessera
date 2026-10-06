@@ -1,11 +1,11 @@
 package com.panzer.mods.tessera.selftest;
 
-import com.panzer.mods.tessera.api.AtlasCompressEvent;
 import com.panzer.mods.tessera.cache.AtlasCache;
 import com.panzer.mods.tessera.compat.TesseraCompat;
 import com.panzer.mods.tessera.compress.CompressedAnimationUploader;
 import com.panzer.mods.tessera.compress.CompressedAnimationUploader.EncodeStats;
 import com.panzer.mods.tessera.compress.Bc7GpuSupport;
+import com.panzer.mods.tessera.compress.CompressionPipeline;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
@@ -25,10 +25,8 @@ import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Supplier;
 
 /**
  * Client self-test ({@code -Dtessera.selftest=true}, Gradle task {@code selftest}):
@@ -58,15 +56,10 @@ public final class TesseraSelfTest {
     private static final int GL_COMPRESSED_RGBA_BPTC_UNORM = 0x8E8C;
     private static final int GL_COMPRESSED_RGB_S3TC_DXT1 = 0x83F0, GL_COMPRESSED_RGBA_S3TC_DXT1 = 0x83F1;
 
-    /**
-     * @param texture what the texture manager holds under the atlas's name, looked up
-     *                at check time: during a reload the event can fire before the new
-     *                atlas is registered there
-     */
-    private record Compressed(Supplier<Object> texture, AtlasCache.CompressedFormat format) {
-    }
-
-    private static final Map<String, Compressed> COMPRESSED = new LinkedHashMap<>();
+    // Compressed atlases come from CompressedAnimationUploader, not AtlasCompressEvent.Post:
+    // on 1.21 - 1.21.1 the first reload runs during mod loading, when NeoForge's bus
+    // still drops events, so the early atlases' events never arrive.
+    private static int seenRegistrations = -1;
     private static int ticks, lastCompressedTick = -1, animatedChanged;
     private static boolean done;
 
@@ -74,13 +67,6 @@ public final class TesseraSelfTest {
     }
 
     public static void register() {
-        NeoForge.EVENT_BUS.addListener(AtlasCompressEvent.Post.class, e -> {
-            var location = e.getAtlasLocation();
-            COMPRESSED.put(location.toString(), new Compressed(
-                    () -> Minecraft.getInstance().getTextureManager().getTexture(location), e.getAppliedFormat()));
-            lastCompressedTick = ticks;
-            EncodeStats.reset();
-        });
         NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, e -> tick());
     }
 
@@ -90,8 +76,14 @@ public final class TesseraSelfTest {
         }
         ticks++;
         Minecraft mc = Minecraft.getInstance();
+        if (CompressedAnimationUploader.registrations() != seenRegistrations) {
+            seenRegistrations = CompressedAnimationUploader.registrations();
+            lastCompressedTick = ticks;
+            EncodeStats.reset();
+        }
         // The block atlas is the largest and usually the last one compressed.
-        boolean blocksDone = COMPRESSED.keySet().stream().anyMatch(name -> name.endsWith("textures/atlas/blocks.png"));
+        boolean blocksDone = CompressedAnimationUploader.compressedAtlases().keySet().stream()
+                .anyMatch(atlas -> isBlocks(atlas.location().toString()));
         boolean settled = !overlayShown(mc) && blocksDone && ticks - lastCompressedTick >= SETTLE_TICKS
                 && CompressedAnimationUploader.pendingUpgrades() == 0;
         if (!settled && ticks < GIVE_UP_TICKS) {
@@ -129,22 +121,21 @@ public final class TesseraSelfTest {
             return false;
         }
         out.add("renderer " + GL11.glGetString(GL11.GL_RENDERER) + ", " + GL11.glGetString(GL11.GL_VERSION));
-        if (COMPRESSED.isEmpty()) {
+        Map<TextureAtlas, CompressionPipeline.Target> compressed = CompressedAnimationUploader.compressedAtlases();
+        if (compressed.isEmpty()) {
             out.add("no atlas was compressed within " + GIVE_UP_TICKS + " ticks");
             return false;
         }
-        boolean ok = COMPRESSED.keySet().stream().anyMatch(name -> name.endsWith("textures/atlas/blocks.png"));
+        boolean ok = compressed.keySet().stream().anyMatch(atlas -> isBlocks(atlas.location().toString()));
         if (!ok) {
             out.add("the block atlas was not compressed");
         }
         boolean anyAnimated = false;
-        for (var entry : COMPRESSED.entrySet()) {
-            if (!(entry.getValue().texture().get() instanceof TextureAtlas atlas)) {
-                out.add("  " + entry.getKey() + ": no texture atlas under that name");
-                ok = false;
-                continue;
-            }
-            ok &= checkAtlas(entry.getKey(), atlas, entry.getValue().format(), out);
+        for (var entry : compressed.entrySet()) {
+            TextureAtlas atlas = entry.getKey();
+            AtlasCache.CompressedFormat format = entry.getValue() == CompressionPipeline.Target.BC7
+                    ? AtlasCache.CompressedFormat.BC7 : AtlasCache.CompressedFormat.BC1;
+            ok &= checkAtlas(atlas.location().toString(), atlas, format, out);
             anyAnimated |= atlas.getTextures().values().stream()
                     .anyMatch(sprite -> TesseraCompat.isAnimated(sprite.contents()));
         }
@@ -155,6 +146,10 @@ public final class TesseraSelfTest {
             ok = false;
         }
         return ok;
+    }
+
+    private static boolean isBlocks(String atlasName) {
+        return atlasName.endsWith("textures/atlas/blocks.png");
     }
 
     private static boolean checkAtlas(String name, TextureAtlas atlas, AtlasCache.CompressedFormat expectedFormat,
