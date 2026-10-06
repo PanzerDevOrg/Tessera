@@ -17,7 +17,7 @@ authors = "Bichal"
 description = "Tessera: Minecraft's textures take less video memory, and look the same."
 side = "CLIENT"
 issues = "https://github.com/PanzerDevOrg/Tessera/issues"
-banner = ""
+banner = "banner.png"
 
 # Celeris is both a compile dependency and a required runtime mod (declared in
 # neoforge.mods.toml). panzer-build-logic resolves `artifact` ({mc} = the
