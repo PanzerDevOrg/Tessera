@@ -10,6 +10,7 @@ pluginManagement {
         gradlePluginPortal()
         mavenCentral()
         maven("https://maven.neoforged.net/releases/") { name = "NeoForged" }
+        maven("https://maven.fabricmc.net/") { name = "Fabric" }
         maven("https://maven.kikugie.dev/releases") { name = "KikuGie Releases" }
         maven("https://maven.kikugie.dev/snapshots") { name = "KikuGie Snapshots" }
     }
