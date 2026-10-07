@@ -7,33 +7,49 @@
 [![License](https://img.shields.io/badge/Code-AGPLv3-blueviolet?style=for-the-badge)](#license)
 <!-- publish:on -->
 
-**Tessera makes Minecraft use less video memory.** It shrinks the game's textures on your graphics card by up to
-75%, and the game looks exactly the same. Helpful with big resource packs, large modpacks, or a GPU without much
-memory.
+<p align="center">
+<img src="https://img.shields.io/badge/Video%20memory-up%20to%20%E2%88%9275%25-1f9d55?style=for-the-badge" alt="Up to 75% less video memory">
+<img src="https://img.shields.io/badge/Minecraft-1.21%20%E2%80%93%201.21.11%20%C2%B7%2026.1%20%E2%80%93%2026.3-3c8527?style=for-the-badge" alt="Minecraft 1.21 – 1.21.11 and 26.1 – 26.3">
+<img src="https://img.shields.io/badge/NeoForge-Client%20only-e8710a?style=for-the-badge" alt="NeoForge, client only">
+</p>
 
-- Nothing to set up: install it and play.
-- Water, lava, fire and every other animated texture keep moving.
-- No freezes while textures load; the work happens in the background.
-- Doesn't change how the game draws, so shaders and other visual mods keep working.
-- Press F3 to see how much video memory it saves (on every version except 1.21.5 – 1.21.9).
+> **Tessera makes Minecraft use less video memory.** It shrinks the game's textures on your graphics card by up to
+> **75%**, and the game looks exactly the same. Helpful with big resource packs, large modpacks, or a GPU without
+> much memory.
+
+## ✨ Features
+
+- 🎯 **Nothing to set up:** install it and play.
+- 🌊 **Animations keep moving:** water, lava, fire and every other animated texture.
+- 🧊 **No freezes** while textures load: the work happens in the background.
+- 🎨 **Shaders welcome:** it doesn't change how the game draws, so shaders and other visual mods keep working.
+- 📊 **See the savings:** press F3 to see how much video memory it saves (on every version except 1.21.5 – 1.21.9).
 
 > **You also need [Celeris](https://github.com/PanzerDevOrg/Celeris).** Put both in your `mods` folder.
 
-## Before and after
+## 📉 What it saves
 
-| Version 0.1 (old) | Version 0.2 (new) |
+This is Tessera's corner of the F3 screen in a normal world: the textures take **3.96 MB** of video memory instead
+of **15.84 MB**.
+
+<p align="center"><img src="./docs/media/active_mod.png" alt="F3: Atlas VRAM 3.96 MB of 15.84 MB, saved 11.88 MB"></p>
+
+The more textures your packs and mods add, the more it saves. An earlier version, for comparison:
+
+| Earlier version | Now |
 |:---:|:---:|
-| ![Old version saving 6.13 MB](./docs/media/old_active_mod.png) | ![New version saving 11.88 MB](./docs/media/active_mod.png) |
+| ![Earlier version saving 6.13 MB](./docs/media/old_active_mod.png) | ![Current version saving 11.88 MB](./docs/media/active_mod.png) |
 
-The number in the corner is the video memory saved. The more textures your packs and mods add, the more it saves.
+## 🖥️ Will it work for me?
 
-## Will it work for me?
+| Your setup | Tessera |
+|---|---|
+| **Minecraft** 1.21 – 1.21.11 and 26.1 – 26.3, NeoForge | ✅ Download the file made for your version |
+| **Windows** or **Linux** | ✅ Supported |
+| **macOS** | ❌ macOS doesn't support the texture format Tessera needs |
+| **Servers** | ➖ Not needed: it runs on your computer only, and you can join any server with it |
 
-- **Minecraft** 1.21 – 1.21.11 and 26.1 – 26.3, on NeoForge. Download the file made for your version.
-- **Windows or Linux.** Macs can't use it: macOS doesn't support the texture format Tessera needs.
-- **Your computer only.** Servers don't need it, and you can join any server with it.
-
-## Learn more
+## 📚 Learn more
 
 Settings, extra speed tips, how it works and the full version list are on GitHub.
 
