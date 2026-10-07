@@ -1,15 +1,8 @@
 ![Tessera](./docs/media/banner.png)
 
-<!-- publish:off -->
-[![NeoForge](https://img.shields.io/badge/NeoForge-1.21%20%E2%80%93%2026.3-orange?style=for-the-badge)](https://neoforged.net/)
-[![Modrinth](https://img.shields.io/badge/Modrinth-Download-1bd96a?style=for-the-badge&logo=modrinth)](https://modrinth.com/mod/tesseras)
-[![CurseForge](https://img.shields.io/badge/CurseForge-Download-f16436?style=for-the-badge&logo=curseforge)](https://www.curseforge.com/minecraft/mc-mods/tessera)
-[![License](https://img.shields.io/badge/Code-AGPLv3-blueviolet?style=for-the-badge)](#license)
-<!-- publish:on -->
-
 <p align="center">
 <img src="https://img.shields.io/badge/Video%20memory-up%20to%20%E2%88%9275%25-1f9d55?style=for-the-badge" alt="Up to 75% less video memory">
-<img src="https://img.shields.io/badge/Minecraft-1.21%20%E2%80%93%201.21.11%20%C2%B7%2026.1%20%E2%80%93%2026.3-3c8527?style=for-the-badge" alt="Minecraft 1.21 – 1.21.11 and 26.1 – 26.3">
+<img src="https://img.shields.io/badge/Minecraft-1.21%20--%2026.3-3c8527?style=for-the-badge" alt="Minecraft 1.21 – 1.21.11 and 26.1 – 26.3">
 <img src="https://img.shields.io/badge/NeoForge-Client%20only-e8710a?style=for-the-badge" alt="NeoForge, client only">
 </p>
 
