@@ -25,7 +25,7 @@ permissions: {}
 
 jobs:
   descriptions:
-    uses: PanzerDevOrg/PanzerBuildLogic/.github/workflows/mod-description.yml@96e490520ce7ff81ffb7939d0108f178bffa03c2 # panzer-build-logic master, 2026-10-08 (no release tags yet)
+    uses: PanzerDevOrg/PanzerBuildLogic/.github/workflows/mod-description.yml@e82ddefe645550540a920fffaf1b2f8a6e29a3f5 # panzer-build-logic master, 2026-10-08 (no release tags yet)
     # Reads the repository; Modrinth is updated with its own token.
     permissions:
       contents: read
