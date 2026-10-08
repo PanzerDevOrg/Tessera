@@ -21,9 +21,15 @@ on:
     tags: ["v*"]
     paths: ["README.md", "docs/media/**", "mod.stonecutter.properties.toml"]
 
+permissions: {}
+
 jobs:
   descriptions:
-    uses: PanzerDevOrg/PanzerBuildLogic/.github/workflows/mod-description.yml@master
+    uses: PanzerDevOrg/PanzerBuildLogic/.github/workflows/mod-description.yml@96e490520ce7ff81ffb7939d0108f178bffa03c2 # panzer-build-logic master, 2026-10-08 (no release tags yet)
+    # Reads the repository; Modrinth is updated with its own token.
+    permissions:
+      contents: read
     with:
       dry-run: ${{ !(startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)) }}
-    secrets: inherit
+    secrets:
+      MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
